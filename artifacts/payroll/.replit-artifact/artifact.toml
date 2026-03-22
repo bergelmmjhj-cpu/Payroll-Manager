@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "MMJ Payroll System"
+version = "1.0.0"
+id = "artifacts/payroll"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24509
+
+[services.development]
+run = "pnpm --filter @workspace/payroll run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/payroll", "run", "build" ]
+publicDir = "artifacts/payroll/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24509"
+BASE_PATH = "/"
