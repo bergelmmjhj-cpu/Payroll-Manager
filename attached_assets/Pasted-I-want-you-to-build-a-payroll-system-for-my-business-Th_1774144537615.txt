@@ -1,0 +1,344 @@
+I want you to build a payroll system for my business.
+
+This must be EXTREMELY easy to use — so simple that even boomers with very little computer knowledge can use it comfortably without training. Think: large buttons, plain English labels, no clutter, no technical wording, step-by-step flow, and everything visible at a glance.
+
+Study and use the uploaded payroll Excel files as the basis of the system. Pre-setup the app using what is already available in those sheets. Do not start from a blank generic payroll product. Build around the real workflow shown in the files.
+
+What I need from you
+Build a clean, production-ready payroll system that replaces the spreadsheet process while preserving the logic and data structure already being used.
+
+Use the uploaded workbooks to understand the workflow across all sheets, then create the app with seeded data structures and import-ready mappings.
+
+Important: I do NOT want a complicated accountant-style payroll system. I want a practical operations payroll system for staff/subcontractors that is very easy to use.
+
+Core design principles
+1. Ultra-simple interface
+- very large readable text
+- clear sections
+- minimal clicks
+- dashboard with obvious next actions
+- no confusing menus
+- editable tables only where necessary
+- use plain labels like “Worker Name”, “Hours”, “Hotel”, “Payment Method”, “Ready to Pay”
+- use color status badges for Missing, Needs Review, Ready, Paid
+
+2. Spreadsheet-based workflow preserved
+The current spreadsheet workflow clearly revolves around:
+- pay periods
+- hotels / worksites
+- workers
+- hours by date
+- subcontractor vs payroll classification
+- rates
+- totals
+- interac / e-transfer details
+- cheque / pickup / payment mode
+- tally / reconciliation against source timesheets
+- summary by hotel
+- summary A-Z by worker
+- special regional groupings like GTA, Outside GTA, Ottawa, British Columbia
+
+Build the app around this real workflow.
+
+3. Pre-setup from existing files
+Use the uploaded files to pre-define:
+- pay period structure
+- worker master list
+- subcontractor records
+- hotels / client locations
+- regions
+- payment method options
+- interac details fields
+- cheque / pickup handling
+- remarks / notes structure
+- summary views
+- tally / reconciliation logic
+
+What I observed in the uploaded workbook structure
+Across the uploaded payroll files, there are recurring sheets such as:
+- DRAFT
+- MMJ
+- SUBCON
+- SUBCON (2), (3), (4), (5)
+- Tally
+- Master List
+- SUMMARY A-Z
+- Summary Hotel
+- Subcontractors
+- GTA
+- OUTSIDE GTA
+- OTTAWA
+- SUBCON - BC
+- British Columbia
+- COUNTER
+- Interac Details
+- Payroll Instructions
+- DRAFT SUM
+- FOR CHEQUE
+- NAMES
+
+Use these as the starting blueprint for the software modules.
+
+How the system should be structured
+
+A. Dashboard
+Create a very simple homepage showing:
+- Current Pay Period
+- Total Workers This Period
+- Total Hours
+- Total Payroll Amount
+- Total Subcontractor Amount
+- Missing Interac Details
+- Workers Needing Review
+- Hotels Not Balanced
+- Ready to Pay count
+- Paid count
+
+Also include large action buttons:
+- Import Timesheet
+- Add Hours
+- Review Payroll
+- Review Subcontractors
+- Check Tally
+- Prepare Payments
+- Print / Export Summary
+
+B. Main data modules
+Create these modules:
+
+1. Workers
+Fields:
+- full name
+- alias / alternate name
+- worker ID
+- type: Payroll or Subcontractor
+- phone
+- address
+- interac email
+- payment mode
+- mail or pickup
+- notes / comments
+- active / inactive
+- region
+- default rate
+- special rate override if needed
+
+2. Hotels / Clients / Worksites
+Fields:
+- hotel / site name
+- full address
+- region
+- active / inactive
+- notes
+
+3. Pay Periods
+Fields:
+- label
+- start date
+- end date
+- status: Draft / Review / Ready / Closed
+
+4. Time Entries
+Fields:
+- pay period
+- work date
+- worker
+- hotel / site
+- hours
+- rate
+- type
+- notes
+- source sheet / source import
+- status
+
+5. Payments
+Fields:
+- pay period
+- worker
+- total hours
+- rate
+- gross total
+- payment method
+- interac email
+- cheque flag
+- pickup flag
+- paid status
+- paid date
+- notes
+
+C. Required app screens
+
+1. Worker Directory
+A simple searchable list of all workers.
+Quick filters:
+- payroll
+- subcontractor
+- missing interac
+- cheque
+- pickup
+- inactive
+- by region
+
+2. Hotel / Site Directory
+List all hotels / sites with ability to see:
+- assigned workers
+- total hours this pay period
+- total cost this pay period
+- issues / discrepancies
+
+3. Pay Period Workspace
+When a pay period is opened, show tabs:
+- By Hotel
+- By Worker
+- Payroll
+- Subcontractors
+- Tally
+- Payment Prep
+- Export
+
+4. By Hotel View
+Show each hotel with:
+- workers assigned in the period
+- hours
+- rates
+- totals
+- notes
+- discrepancy warning if totals do not match source
+
+5. By Worker View
+Equivalent of SUMMARY A-Z:
+- worker name
+- payment mode
+- hours
+- type
+- rate
+- total
+- hotel
+- interac
+- ready / missing info
+
+6. Payment Prep View
+Equivalent of FOR CHEQUE + Interac Details + mail/pickup logic:
+- show all workers to be paid
+- auto-group by payment method:
+  - e-transfer
+  - cheque
+  - pickup
+  - direct deposit if needed
+- clearly flag missing payment details
+- one-click mark as ready
+- one-click mark as paid
+
+7. Tally / Reconciliation View
+Equivalent of Tally sheet:
+- hotel
+- payroll/subcon calculated total
+- imported/source total
+- difference
+- status checkmark if matched
+- red warning if mismatched
+
+This must be very easy to read.
+
+D. Import and prefill logic
+Build an importer that can read the uploaded workbook structure and map data from the recurring sheets.
+
+At minimum, support importing data from:
+- Master List
+- Summary Hotel
+- SUMMARY A-Z
+- Subcontractors
+- Interac Details
+- FOR CHEQUE
+- NAMES
+- Tally
+- DRAFT
+- MMJ
+- regional sheets like GTA / OUTSIDE GTA / OTTAWA / British Columbia
+
+The importer should:
+- detect pay period from workbook
+- extract worker names
+- extract hours
+- extract rates
+- extract worker type
+- extract total pay
+- extract hotel / location
+- extract interac email
+- extract payment mode
+- extract remarks and aliases where available
+- merge duplicate worker names carefully
+- preserve notes/comments
+- show an import preview before saving
+
+E. Important business rules
+Please implement these carefully:
+- a worker can appear under multiple hotels in one pay period
+- the same person may have alias variations or naming inconsistencies
+- a worker may be Payroll in one case and Subcontractor in another only if explicitly allowed by data rules
+- rates may vary by worker or assignment
+- some records may be incomplete and should be flagged, not silently dropped
+- payment readiness depends on required payment details being present
+- tally discrepancies must always be visible
+- summaries must be printable/exportable
+
+F. Output / reports needed
+Generate easy export screens for:
+- payroll summary by worker
+- payroll summary by hotel
+- subcontractor summary
+- payment list for e-transfer
+- cheque list
+- discrepancy report
+- missing details report
+
+G. Build quality requirements
+- mobile-friendly but optimized for desktop first
+- clean database schema
+- no dummy filler data unless clearly marked
+- use the uploaded workbook structure to seed realistic fields and labels
+- create a migration / seed process for existing payroll data
+- add sample records from the workbook import so the UI is not empty
+- create a very simple onboarding state for the first user
+
+H. UX requirements for older users
+This is very important:
+- large font sizes
+- high contrast
+- obvious save buttons
+- avoid hidden actions
+- avoid icon-only buttons
+- use words instead of jargon
+- confirm before destructive actions
+- highlight missing information clearly
+- simple date pickers
+- no dense admin dashboards
+
+I. Technical deliverables I want from you
+1. Study the uploaded files first
+2. Explain the real workbook workflow you detected
+3. Propose the app structure based on that workflow
+4. Build the actual app screens and database
+5. Pre-setup with the currently available data structure from the files
+6. Implement importers/mappers for the workbook sheets
+7. Make the first version usable immediately
+
+Also tell me clearly:
+- what you were able to extract from the sheets
+- what you could not safely infer
+- what assumptions you made
+- which fields need manual confirmation
+
+Important cleanup notes from the workbook
+Please also account for the fact that the workbook appears to contain:
+- repeated legacy tabs
+- duplicated SUBCON versions
+- some old pay period headers carried forward
+- possible formula/reference issues
+- inconsistent naming
+- manually maintained summary areas
+
+Do not blindly recreate spreadsheet mess. Normalize it into a clean system while preserving the useful workflow.
+
+Main goal
+Turn these payroll spreadsheets into a dead-simple payroll operations system that feels familiar, is much easier to use, and is already pre-structured from the uploaded files.
