@@ -1,22 +1,31 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: MMJ Payroll System API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
-    description: Health operations
+  - name: auth
+  - name: sync
+  - name: workers
+  - name: hotels
+  - name: payPeriods
+  - name: timeEntries
+  - name: payments
+  - name: invoices
+  - name: businessProfiles
+  - name: logos
+  - name: dashboard
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +33,1081 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ─── Auth ───────────────────────────────────────────────────────────────────
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current authenticated user
+      responses:
+        "200":
+          description: Authenticated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUser"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout current user
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  # ─── Sync ───────────────────────────────────────────────────────────────────
+  /sync/workers:
+    post:
+      operationId: syncWorkers
+      tags: [sync]
+      summary: Sync workers from Render DB
+      responses:
+        "200":
+          description: Sync result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncResult"
+
+  /sync/hotels:
+    post:
+      operationId: syncHotels
+      tags: [sync]
+      summary: Sync hotels/workplaces from Render DB
+      responses:
+        "200":
+          description: Sync result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncResult"
+
+  # ─── Dashboard ──────────────────────────────────────────────────────────────
+  /dashboard:
+    get:
+      operationId: getDashboardStats
+      tags: [dashboard]
+      summary: Get dashboard statistics
+      responses:
+        "200":
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+
+  # ─── Workers ────────────────────────────────────────────────────────────────
+  /workers:
+    get:
+      operationId: listWorkers
+      tags: [workers]
+      summary: List all workers
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [payroll, subcontractor, all]
+        - name: region
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of workers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Worker"
+    post:
+      operationId: createWorker
+      tags: [workers]
+      summary: Create a new worker
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWorkerBody"
+      responses:
+        "201":
+          description: Created worker
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Worker"
+
+  /workers/{id}:
+    get:
+      operationId: getWorker
+      tags: [workers]
+      summary: Get a worker by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Worker
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Worker"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateWorker
+      tags: [workers]
+      summary: Update a worker
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateWorkerBody"
+      responses:
+        "200":
+          description: Updated worker
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Worker"
+    delete:
+      operationId: deleteWorker
+      tags: [workers]
+      summary: Delete a worker
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ─── Hotels ─────────────────────────────────────────────────────────────────
+  /hotels:
+    get:
+      operationId: listHotels
+      tags: [hotels]
+      summary: List all hotels/worksites
+      parameters:
+        - name: region
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of hotels
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Hotel"
+    post:
+      operationId: createHotel
+      tags: [hotels]
+      summary: Create a hotel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateHotelBody"
+      responses:
+        "201":
+          description: Created hotel
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Hotel"
+
+  /hotels/{id}:
+    get:
+      operationId: getHotel
+      tags: [hotels]
+      summary: Get a hotel by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Hotel
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Hotel"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateHotel
+      tags: [hotels]
+      summary: Update a hotel
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateHotelBody"
+      responses:
+        "200":
+          description: Updated hotel
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Hotel"
+    delete:
+      operationId: deleteHotel
+      tags: [hotels]
+      summary: Delete a hotel
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ─── Pay Periods ─────────────────────────────────────────────────────────────
+  /pay-periods:
+    get:
+      operationId: listPayPeriods
+      tags: [payPeriods]
+      summary: List all pay periods
+      responses:
+        "200":
+          description: List of pay periods
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PayPeriod"
+    post:
+      operationId: createPayPeriod
+      tags: [payPeriods]
+      summary: Create a pay period
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePayPeriodBody"
+      responses:
+        "201":
+          description: Created pay period
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayPeriod"
+
+  /pay-periods/{id}:
+    get:
+      operationId: getPayPeriod
+      tags: [payPeriods]
+      summary: Get pay period with all entries
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Pay period detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayPeriodDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updatePayPeriod
+      tags: [payPeriods]
+      summary: Update a pay period
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePayPeriodBody"
+      responses:
+        "200":
+          description: Updated pay period
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayPeriod"
+    delete:
+      operationId: deletePayPeriod
+      tags: [payPeriods]
+      summary: Delete a pay period
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ─── Time Entries ────────────────────────────────────────────────────────────
+  /pay-periods/{periodId}/entries:
+    get:
+      operationId: listTimeEntries
+      tags: [timeEntries]
+      summary: List time entries for a pay period
+      parameters:
+        - name: periodId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: hotelId
+          in: query
+          schema:
+            type: integer
+        - name: workerId
+          in: query
+          schema:
+            type: integer
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [payroll, subcontractor]
+      responses:
+        "200":
+          description: List of time entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TimeEntry"
+    post:
+      operationId: createTimeEntry
+      tags: [timeEntries]
+      summary: Create a time entry
+      parameters:
+        - name: periodId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTimeEntryBody"
+      responses:
+        "201":
+          description: Created time entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeEntry"
+
+  /pay-periods/{periodId}/entries/{id}:
+    patch:
+      operationId: updateTimeEntry
+      tags: [timeEntries]
+      summary: Update a time entry
+      parameters:
+        - name: periodId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTimeEntryBody"
+      responses:
+        "200":
+          description: Updated time entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeEntry"
+    delete:
+      operationId: deleteTimeEntry
+      tags: [timeEntries]
+      summary: Delete a time entry
+      parameters:
+        - name: periodId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ─── Bulk time entry upsert ───────────────────────────────────────────────
+  /pay-periods/{periodId}/entries/bulk:
+    post:
+      operationId: bulkUpsertTimeEntries
+      tags: [timeEntries]
+      summary: Bulk upsert time entries (used by import wizard)
+      parameters:
+        - name: periodId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkUpsertTimeEntriesBody"
+      responses:
+        "200":
+          description: Result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkUpsertResult"
+
+  # ─── Tally ───────────────────────────────────────────────────────────────────
+  /pay-periods/{periodId}/tally:
+    get:
+      operationId: getPayPeriodTally
+      tags: [payPeriods]
+      summary: Get tally summary for a pay period
+      parameters:
+        - name: periodId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Tally summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TallySummary"
+
+  # ─── Payments ────────────────────────────────────────────────────────────────
+  /pay-periods/{periodId}/payments:
+    get:
+      operationId: listPayments
+      tags: [payments]
+      summary: List payments for a pay period
+      parameters:
+        - name: periodId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: method
+          in: query
+          schema:
+            type: string
+            enum: [etransfer, cheque, cash, all]
+      responses:
+        "200":
+          description: List of payments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Payment"
+    post:
+      operationId: createPayment
+      tags: [payments]
+      summary: Create a payment record
+      parameters:
+        - name: periodId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePaymentBody"
+      responses:
+        "201":
+          description: Created payment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+
+  /pay-periods/{periodId}/payments/{id}:
+    patch:
+      operationId: updatePayment
+      tags: [payments]
+      summary: Update a payment (e.g. mark paid)
+      parameters:
+        - name: periodId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePaymentBody"
+      responses:
+        "200":
+          description: Updated payment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+    delete:
+      operationId: deletePayment
+      tags: [payments]
+      summary: Delete a payment record
+      parameters:
+        - name: periodId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /pay-periods/{periodId}/payments/{id}/mark-paid:
+    post:
+      operationId: markPaymentPaid
+      tags: [payments]
+      summary: Mark a payment as paid
+      parameters:
+        - name: periodId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated payment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+
+  # ─── Export ───────────────────────────────────────────────────────────────────
+  /pay-periods/{periodId}/export:
+    get:
+      operationId: exportPayPeriod
+      tags: [payPeriods]
+      summary: Export pay period data as CSV
+      parameters:
+        - name: periodId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [payroll, subcontractors, etransfer, cheque, tally, missing]
+      responses:
+        "200":
+          description: CSV data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportResult"
+
+  # ─── Excel Import ─────────────────────────────────────────────────────────────
+  /import/analyze:
+    post:
+      operationId: analyzeImport
+      tags: [payPeriods]
+      summary: Analyze uploaded Excel workbook and return sheet summary
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalyzeImportBody"
+      responses:
+        "200":
+          description: Analysis result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportAnalysis"
+
+  /import/confirm:
+    post:
+      operationId: confirmImport
+      tags: [payPeriods]
+      summary: Confirm and execute import into a pay period
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmImportBody"
+      responses:
+        "200":
+          description: Import result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportResult"
+
+  # ─── Business Profiles ───────────────────────────────────────────────────────
+  /business-profiles:
+    get:
+      operationId: listBusinessProfiles
+      tags: [businessProfiles]
+      summary: List all business profiles
+      responses:
+        "200":
+          description: List of profiles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BusinessProfile"
+    post:
+      operationId: createBusinessProfile
+      tags: [businessProfiles]
+      summary: Create a business profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBusinessProfileBody"
+      responses:
+        "201":
+          description: Created profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessProfile"
+
+  /business-profiles/{id}:
+    get:
+      operationId: getBusinessProfile
+      tags: [businessProfiles]
+      summary: Get a business profile
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessProfile"
+    patch:
+      operationId: updateBusinessProfile
+      tags: [businessProfiles]
+      summary: Update a business profile
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBusinessProfileBody"
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessProfile"
+    delete:
+      operationId: deleteBusinessProfile
+      tags: [businessProfiles]
+      summary: Delete a business profile
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /business-profiles/{id}/set-default:
+    post:
+      operationId: setDefaultBusinessProfile
+      tags: [businessProfiles]
+      summary: Set a profile as the default
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessProfile"
+
+  # ─── Logos ───────────────────────────────────────────────────────────────────
+  /logos:
+    get:
+      operationId: listLogos
+      tags: [logos]
+      summary: List all uploaded logos
+      responses:
+        "200":
+          description: List of logos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Logo"
+    post:
+      operationId: uploadLogo
+      tags: [logos]
+      summary: Upload a logo file (base64 encoded)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadLogoBody"
+      responses:
+        "201":
+          description: Uploaded logo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Logo"
+
+  /logos/{id}:
+    get:
+      operationId: getLogo
+      tags: [logos]
+      summary: Get a logo (returns base64 data)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Logo data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Logo"
+    delete:
+      operationId: deleteLogo
+      tags: [logos]
+      summary: Delete a logo
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ─── Invoices ─────────────────────────────────────────────────────────────────
+  /invoices:
+    get:
+      operationId: listInvoices
+      tags: [invoices]
+      summary: List all invoices
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, sent, paid, all]
+        - name: clientName
+          in: query
+          schema:
+            type: string
+        - name: periodId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of invoices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Invoice"
+    post:
+      operationId: createInvoice
+      tags: [invoices]
+      summary: Create an invoice (manual or auto-generated)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInvoiceBody"
+      responses:
+        "201":
+          description: Created invoice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceDetail"
+
+  /invoices/generate-from-period:
+    post:
+      operationId: generateInvoiceFromPeriod
+      tags: [invoices]
+      summary: Auto-generate a draft invoice from pay period data
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateInvoiceFromPeriodBody"
+      responses:
+        "201":
+          description: Generated invoice draft
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceDetail"
+
+  /invoices/{id}:
+    get:
+      operationId: getInvoice
+      tags: [invoices]
+      summary: Get an invoice with line items
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Invoice detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateInvoice
+      tags: [invoices]
+      summary: Update an invoice (fields + line items)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateInvoiceBody"
+      responses:
+        "200":
+          description: Updated invoice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceDetail"
+    delete:
+      operationId: deleteInvoice
+      tags: [invoices]
+      summary: Delete an invoice
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /invoices/{id}/mark-sent:
+    post:
+      operationId: markInvoiceSent
+      tags: [invoices]
+      summary: Mark invoice as sent
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated invoice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+
+  /invoices/{id}/mark-paid:
+    post:
+      operationId: markInvoicePaid
+      tags: [invoices]
+      summary: Mark invoice as paid
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated invoice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+
+  /invoices/{id}/duplicate:
+    post:
+      operationId: duplicateInvoice
+      tags: [invoices]
+      summary: Duplicate an invoice as a new draft
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "201":
+          description: Duplicated invoice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceDetail"
+
 components:
   schemas:
     HealthStatus:
@@ -31,6 +1115,1002 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required: [message]
+
+    AuthUser:
+      type: object
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        name:
+          type: string
+        googleId:
+          type: string
+        avatarUrl:
+          type: ["string", "null"]
+      required: [id, email, name, googleId]
+
+    SyncResult:
+      type: object
+      properties:
+        inserted:
+          type: integer
+        updated:
+          type: integer
+        total:
+          type: integer
+        message:
+          type: string
+      required: [inserted, updated, total, message]
+
+    DashboardStats:
+      type: object
+      properties:
+        totalWorkers:
+          type: integer
+        totalHotels:
+          type: integer
+        activePayPeriods:
+          type: integer
+        draftInvoices:
+          type: integer
+        recentPayPeriods:
+          type: array
+          items:
+            $ref: "#/components/schemas/PayPeriod"
+      required: [totalWorkers, totalHotels, activePayPeriods, draftInvoices, recentPayPeriods]
+
+    Worker:
+      type: object
+      properties:
+        id:
+          type: integer
+        renderDbId:
+          type: ["string", "null"]
+        name:
+          type: string
+        email:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        city:
+          type: ["string", "null"]
+        province:
+          type: ["string", "null"]
+        workerType:
+          type: string
+          enum: [payroll, subcontractor]
+        isActive:
+          type: boolean
+        interacEmail:
+          type: ["string", "null"]
+        paymentMethod:
+          type: ["string", "null"]
+        bankName:
+          type: ["string", "null"]
+        bankAccount:
+          type: ["string", "null"]
+        sinNumber:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required: [id, name, workerType, isActive, createdAt, updatedAt]
+
+    CreateWorkerBody:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        city:
+          type: ["string", "null"]
+        province:
+          type: ["string", "null"]
+        workerType:
+          type: string
+          enum: [payroll, subcontractor]
+        interacEmail:
+          type: ["string", "null"]
+        paymentMethod:
+          type: ["string", "null"]
+        bankName:
+          type: ["string", "null"]
+        bankAccount:
+          type: ["string", "null"]
+        sinNumber:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+      required: [name, workerType]
+
+    UpdateWorkerBody:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        city:
+          type: ["string", "null"]
+        province:
+          type: ["string", "null"]
+        workerType:
+          type: string
+          enum: [payroll, subcontractor]
+        isActive:
+          type: boolean
+        interacEmail:
+          type: ["string", "null"]
+        paymentMethod:
+          type: ["string", "null"]
+        bankName:
+          type: ["string", "null"]
+        bankAccount:
+          type: ["string", "null"]
+        sinNumber:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+
+    Hotel:
+      type: object
+      properties:
+        id:
+          type: integer
+        renderDbId:
+          type: ["string", "null"]
+        name:
+          type: string
+        address:
+          type: ["string", "null"]
+        city:
+          type: ["string", "null"]
+        province:
+          type: ["string", "null"]
+        region:
+          type: ["string", "null"]
+        contactName:
+          type: ["string", "null"]
+        contactPhone:
+          type: ["string", "null"]
+        contactEmail:
+          type: ["string", "null"]
+        isActive:
+          type: boolean
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required: [id, name, isActive, createdAt, updatedAt]
+
+    CreateHotelBody:
+      type: object
+      properties:
+        name:
+          type: string
+        address:
+          type: ["string", "null"]
+        city:
+          type: ["string", "null"]
+        province:
+          type: ["string", "null"]
+        region:
+          type: ["string", "null"]
+        contactName:
+          type: ["string", "null"]
+        contactPhone:
+          type: ["string", "null"]
+        contactEmail:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+      required: [name]
+
+    UpdateHotelBody:
+      type: object
+      properties:
+        name:
+          type: string
+        address:
+          type: ["string", "null"]
+        city:
+          type: ["string", "null"]
+        province:
+          type: ["string", "null"]
+        region:
+          type: ["string", "null"]
+        contactName:
+          type: ["string", "null"]
+        contactPhone:
+          type: ["string", "null"]
+        contactEmail:
+          type: ["string", "null"]
+        isActive:
+          type: boolean
+        notes:
+          type: ["string", "null"]
+
+    PayPeriod:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        startDate:
+          type: string
+        endDate:
+          type: string
+        status:
+          type: string
+          enum: [draft, in_progress, review, finalized]
+        totalPayroll:
+          type: ["number", "null"]
+        totalSubcontractors:
+          type: ["number", "null"]
+        totalGrand:
+          type: ["number", "null"]
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required: [id, name, startDate, endDate, status, createdAt, updatedAt]
+
+    PayPeriodDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        startDate:
+          type: string
+        endDate:
+          type: string
+        status:
+          type: string
+          enum: [draft, in_progress, review, finalized]
+        totalPayroll:
+          type: ["number", "null"]
+        totalSubcontractors:
+          type: ["number", "null"]
+        totalGrand:
+          type: ["number", "null"]
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/TimeEntry"
+        payments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Payment"
+      required: [id, name, startDate, endDate, status, createdAt, updatedAt, entries, payments]
+
+    CreatePayPeriodBody:
+      type: object
+      properties:
+        name:
+          type: string
+        startDate:
+          type: string
+        endDate:
+          type: string
+        notes:
+          type: ["string", "null"]
+      required: [name, startDate, endDate]
+
+    UpdatePayPeriodBody:
+      type: object
+      properties:
+        name:
+          type: string
+        startDate:
+          type: string
+        endDate:
+          type: string
+        status:
+          type: string
+          enum: [draft, in_progress, review, finalized]
+        notes:
+          type: ["string", "null"]
+
+    TimeEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        periodId:
+          type: integer
+        workerId:
+          type: integer
+        hotelId:
+          type: ["integer", "null"]
+        workerName:
+          type: string
+        hotelName:
+          type: ["string", "null"]
+        entryType:
+          type: string
+          enum: [payroll, subcontractor]
+        hoursWorked:
+          type: ["number", "null"]
+        ratePerHour:
+          type: ["number", "null"]
+        flatAmount:
+          type: ["number", "null"]
+        totalAmount:
+          type: number
+        paymentStatus:
+          type: string
+          enum: [pending, ready, paid, missing_info]
+        paymentMethod:
+          type: ["string", "null"]
+        interacEmail:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        region:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required: [id, periodId, workerId, workerName, entryType, totalAmount, paymentStatus, createdAt, updatedAt]
+
+    CreateTimeEntryBody:
+      type: object
+      properties:
+        workerId:
+          type: integer
+        hotelId:
+          type: ["integer", "null"]
+        entryType:
+          type: string
+          enum: [payroll, subcontractor]
+        hoursWorked:
+          type: ["number", "null"]
+        ratePerHour:
+          type: ["number", "null"]
+        flatAmount:
+          type: ["number", "null"]
+        totalAmount:
+          type: number
+        paymentMethod:
+          type: ["string", "null"]
+        interacEmail:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        region:
+          type: ["string", "null"]
+      required: [workerId, entryType, totalAmount]
+
+    UpdateTimeEntryBody:
+      type: object
+      properties:
+        workerId:
+          type: integer
+        hotelId:
+          type: ["integer", "null"]
+        entryType:
+          type: string
+          enum: [payroll, subcontractor]
+        hoursWorked:
+          type: ["number", "null"]
+        ratePerHour:
+          type: ["number", "null"]
+        flatAmount:
+          type: ["number", "null"]
+        totalAmount:
+          type: number
+        paymentStatus:
+          type: string
+          enum: [pending, ready, paid, missing_info]
+        paymentMethod:
+          type: ["string", "null"]
+        interacEmail:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        region:
+          type: ["string", "null"]
+
+    BulkUpsertTimeEntriesBody:
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateTimeEntryBody"
+        replaceAll:
+          type: boolean
+      required: [entries]
+
+    BulkUpsertResult:
+      type: object
+      properties:
+        inserted:
+          type: integer
+        updated:
+          type: integer
+        total:
+          type: integer
+      required: [inserted, updated, total]
+
+    TallySummary:
+      type: object
+      properties:
+        periodId:
+          type: integer
+        totalPayroll:
+          type: number
+        totalSubcontractors:
+          type: number
+        grandTotal:
+          type: number
+        workerCount:
+          type: integer
+        hotelCount:
+          type: integer
+        missingInfoCount:
+          type: integer
+        byHotel:
+          type: array
+          items:
+            $ref: "#/components/schemas/HotelTally"
+        byWorker:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkerTally"
+        byRegion:
+          type: array
+          items:
+            $ref: "#/components/schemas/RegionTally"
+      required: [periodId, totalPayroll, totalSubcontractors, grandTotal, workerCount, hotelCount, missingInfoCount, byHotel, byWorker, byRegion]
+
+    HotelTally:
+      type: object
+      properties:
+        hotelId:
+          type: ["integer", "null"]
+        hotelName:
+          type: string
+        region:
+          type: ["string", "null"]
+        totalAmount:
+          type: number
+        workerCount:
+          type: integer
+      required: [hotelName, totalAmount, workerCount]
+
+    WorkerTally:
+      type: object
+      properties:
+        workerId:
+          type: integer
+        workerName:
+          type: string
+        entryType:
+          type: string
+        totalAmount:
+          type: number
+        paymentStatus:
+          type: string
+        paymentMethod:
+          type: ["string", "null"]
+      required: [workerId, workerName, entryType, totalAmount, paymentStatus]
+
+    RegionTally:
+      type: object
+      properties:
+        region:
+          type: string
+        totalAmount:
+          type: number
+        workerCount:
+          type: integer
+      required: [region, totalAmount, workerCount]
+
+    Payment:
+      type: object
+      properties:
+        id:
+          type: integer
+        periodId:
+          type: integer
+        workerId:
+          type: integer
+        workerName:
+          type: string
+        amount:
+          type: number
+        paymentMethod:
+          type: string
+          enum: [etransfer, cheque, cash]
+        interacEmail:
+          type: ["string", "null"]
+        chequeNumber:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [pending, sent, cleared]
+        paidAt:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required: [id, periodId, workerId, workerName, amount, paymentMethod, status, createdAt, updatedAt]
+
+    CreatePaymentBody:
+      type: object
+      properties:
+        workerId:
+          type: integer
+        amount:
+          type: number
+        paymentMethod:
+          type: string
+          enum: [etransfer, cheque, cash]
+        interacEmail:
+          type: ["string", "null"]
+        chequeNumber:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+      required: [workerId, amount, paymentMethod]
+
+    UpdatePaymentBody:
+      type: object
+      properties:
+        amount:
+          type: number
+        paymentMethod:
+          type: string
+          enum: [etransfer, cheque, cash]
+        interacEmail:
+          type: ["string", "null"]
+        chequeNumber:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [pending, sent, cleared]
+        notes:
+          type: ["string", "null"]
+
+    ExportResult:
+      type: object
+      properties:
+        type:
+          type: string
+        filename:
+          type: string
+        csvData:
+          type: string
+        rowCount:
+          type: integer
+      required: [type, filename, csvData, rowCount]
+
+    AnalyzeImportBody:
+      type: object
+      properties:
+        fileData:
+          type: string
+          description: Base64-encoded Excel file
+        fileName:
+          type: string
+      required: [fileData, fileName]
+
+    ImportAnalysis:
+      type: object
+      properties:
+        fileName:
+          type: string
+        sheets:
+          type: array
+          items:
+            $ref: "#/components/schemas/SheetSummary"
+        detectedPeriodName:
+          type: ["string", "null"]
+        detectedStartDate:
+          type: ["string", "null"]
+        detectedEndDate:
+          type: ["string", "null"]
+        workerCount:
+          type: integer
+        entryCount:
+          type: integer
+      required: [fileName, sheets, workerCount, entryCount]
+
+    SheetSummary:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+        rowCount:
+          type: integer
+        recognized:
+          type: boolean
+      required: [name, type, rowCount, recognized]
+
+    ConfirmImportBody:
+      type: object
+      properties:
+        fileData:
+          type: string
+          description: Base64-encoded Excel file
+        periodId:
+          type: ["integer", "null"]
+          description: Existing period to import into (null = create new)
+        periodName:
+          type: ["string", "null"]
+        startDate:
+          type: ["string", "null"]
+        endDate:
+          type: ["string", "null"]
+        sheetsToImport:
+          type: array
+          items:
+            type: string
+        replaceExisting:
+          type: boolean
+      required: [fileData, sheetsToImport]
+
+    ImportResult:
+      type: object
+      properties:
+        periodId:
+          type: integer
+        periodName:
+          type: string
+        entriesImported:
+          type: integer
+        workersCreated:
+          type: integer
+        warnings:
+          type: array
+          items:
+            type: string
+      required: [periodId, periodName, entriesImported, workersCreated, warnings]
+
+    BusinessProfile:
+      type: object
+      properties:
+        id:
+          type: integer
+        businessName:
+          type: string
+        address:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        hstNumber:
+          type: ["string", "null"]
+        logoId:
+          type: ["integer", "null"]
+        logoUrl:
+          type: ["string", "null"]
+        isDefault:
+          type: boolean
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required: [id, businessName, isDefault, createdAt, updatedAt]
+
+    CreateBusinessProfileBody:
+      type: object
+      properties:
+        businessName:
+          type: string
+        address:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        hstNumber:
+          type: ["string", "null"]
+        logoId:
+          type: ["integer", "null"]
+        isDefault:
+          type: boolean
+        notes:
+          type: ["string", "null"]
+      required: [businessName]
+
+    UpdateBusinessProfileBody:
+      type: object
+      properties:
+        businessName:
+          type: string
+        address:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        hstNumber:
+          type: ["string", "null"]
+        logoId:
+          type: ["integer", "null"]
+        isDefault:
+          type: boolean
+        notes:
+          type: ["string", "null"]
+
+    Logo:
+      type: object
+      properties:
+        id:
+          type: integer
+        filename:
+          type: string
+        mimeType:
+          type: string
+        dataUrl:
+          type: string
+          description: Base64 data URL (data:image/png;base64,...)
+        uploadedAt:
+          type: string
+      required: [id, filename, mimeType, dataUrl, uploadedAt]
+
+    UploadLogoBody:
+      type: object
+      properties:
+        filename:
+          type: string
+        mimeType:
+          type: string
+        dataUrl:
+          type: string
+          description: Base64 data URL
+      required: [filename, mimeType, dataUrl]
+
+    InvoiceLine:
+      type: object
+      properties:
+        id:
+          type: integer
+        description:
+          type: string
+        hours:
+          type: ["number", "null"]
+        rate:
+          type: ["number", "null"]
+        amount:
+          type: number
+        sortOrder:
+          type: integer
+      required: [id, description, amount, sortOrder]
+
+    Invoice:
+      type: object
+      properties:
+        id:
+          type: integer
+        invoiceNumber:
+          type: string
+        businessProfileId:
+          type: ["integer", "null"]
+        businessName:
+          type: ["string", "null"]
+        clientName:
+          type: string
+        clientAddress:
+          type: ["string", "null"]
+        periodId:
+          type: ["integer", "null"]
+        invoiceDate:
+          type: string
+        dueDate:
+          type: ["string", "null"]
+        serviceDescription:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        taxRate:
+          type: ["number", "null"]
+        subtotal:
+          type: number
+        taxAmount:
+          type: number
+        total:
+          type: number
+        status:
+          type: string
+          enum: [draft, sent, paid]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required: [id, invoiceNumber, clientName, invoiceDate, subtotal, taxAmount, total, status, createdAt, updatedAt]
+
+    InvoiceDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        invoiceNumber:
+          type: string
+        businessProfileId:
+          type: ["integer", "null"]
+        businessName:
+          type: ["string", "null"]
+        clientName:
+          type: string
+        clientAddress:
+          type: ["string", "null"]
+        periodId:
+          type: ["integer", "null"]
+        invoiceDate:
+          type: string
+        dueDate:
+          type: ["string", "null"]
+        serviceDescription:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        taxRate:
+          type: ["number", "null"]
+        subtotal:
+          type: number
+        taxAmount:
+          type: number
+        total:
+          type: number
+        status:
+          type: string
+          enum: [draft, sent, paid]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+        lineItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceLine"
+        businessProfile:
+          nullable: true
+          $ref: "#/components/schemas/BusinessProfile"
+      required: [id, invoiceNumber, clientName, invoiceDate, subtotal, taxAmount, total, status, createdAt, updatedAt, lineItems]
+
+    CreateInvoiceBody:
+      type: object
+      properties:
+        invoiceNumber:
+          type: ["string", "null"]
+        businessProfileId:
+          type: ["integer", "null"]
+        clientName:
+          type: string
+        clientAddress:
+          type: ["string", "null"]
+        periodId:
+          type: ["integer", "null"]
+        invoiceDate:
+          type: string
+        dueDate:
+          type: ["string", "null"]
+        serviceDescription:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        taxRate:
+          type: ["number", "null"]
+        lineItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateInvoiceLineBody"
+      required: [clientName, invoiceDate]
+
+    UpdateInvoiceBody:
+      type: object
+      properties:
+        invoiceNumber:
+          type: string
+        businessProfileId:
+          type: ["integer", "null"]
+        clientName:
+          type: string
+        clientAddress:
+          type: ["string", "null"]
+        periodId:
+          type: ["integer", "null"]
+        invoiceDate:
+          type: string
+        dueDate:
+          type: ["string", "null"]
+        serviceDescription:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        taxRate:
+          type: ["number", "null"]
+        lineItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateInvoiceLineBody"
+
+    CreateInvoiceLineBody:
+      type: object
+      properties:
+        description:
+          type: string
+        hours:
+          type: ["number", "null"]
+        rate:
+          type: ["number", "null"]
+        amount:
+          type: number
+        sortOrder:
+          type: integer
+      required: [description, amount, sortOrder]
+
+    GenerateInvoiceFromPeriodBody:
+      type: object
+      properties:
+        periodId:
+          type: integer
+        hotelId:
+          type: ["integer", "null"]
+        businessProfileId:
+          type: ["integer", "null"]
+        invoiceDate:
+          type: string
+        dueDate:
+          type: ["string", "null"]
+        taxRate:
+          type: ["number", "null"]
+        notes:
+          type: ["string", "null"]
+      required: [periodId, invoiceDate]

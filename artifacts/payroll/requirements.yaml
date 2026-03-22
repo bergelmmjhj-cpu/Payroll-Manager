@@ -1,0 +1,18 @@
+packages:
+  "date-fns": "For date formatting and manipulation"
+  "clsx": "For conditional class names"
+  "tailwind-merge": "For merging tailwind classes safely"
+  "@radix-ui/react-dialog": "For accessible modals and dialogs"
+  "@radix-ui/react-slot": "For component composition"
+
+images:
+  - path: "artifacts/payroll/public/images/auth-bg.png"
+    description: "Clean, professional corporate background featuring an abstract modern office building with subtle deep blue and slate tones, soft lighting"
+    aspect_ratio: "16:9"
+  - path: "artifacts/payroll/public/images/placeholder-logo.png"
+    description: "A minimal, professional business logo mark with the letters MMJ in a modern geometric style, navy blue on transparent background"
+    aspect_ratio: "1:1"
+
+notes:
+  - Using generated API hooks from @workspace/api-client-react as instructed
+  - Assuming UI components like Dialog, Drawer, etc., will be built inline using standard HTML/CSS for maximum reliability since we can't guarantee shadcn is fully installed, though we will use standard accessible patterns.
