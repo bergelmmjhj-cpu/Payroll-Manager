@@ -3,21 +3,13 @@ import passport from "passport";
 
 const router: IRouter = Router();
 
-const replitDomain = process.env.REPLIT_DEV_DOMAIN;
-const replitDomains = process.env.REPLIT_DOMAINS?.split(",")[0];
-const FRONTEND_URL = replitDomain
-  ? `https://${replitDomain}`
-  : replitDomains
-    ? `https://${replitDomains}`
-    : (process.env.FRONTEND_URL ?? "");
-
 router.get("/auth/google", passport.authenticate("google", { scope: ["profile", "email"] }));
 
 router.get(
   "/auth/google/callback",
   passport.authenticate("google", { failureRedirect: "/login?error=auth_failed" }),
   (_req, res): void => {
-    res.redirect(`${FRONTEND_URL}/`);
+    res.redirect("/");
   },
 );
 

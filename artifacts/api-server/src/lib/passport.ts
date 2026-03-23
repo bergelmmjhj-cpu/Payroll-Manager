@@ -6,21 +6,35 @@ import { logger } from "./logger";
 
 const replitDomain = process.env.REPLIT_DEV_DOMAIN;
 const replitDomains = process.env.REPLIT_DOMAINS?.split(",")[0];
-const baseUrl = replitDomain
-  ? `https://${replitDomain}`
-  : replitDomains
-    ? `https://${replitDomains}`
-    : (process.env.FRONTEND_URL ?? "http://localhost:80");
+const localPort = process.env.PORT ?? "8080";
+const appOrigin = process.env.APP_ORIGIN
+  ?? process.env.FRONTEND_URL
+  ?? (replitDomain
+    ? `https://${replitDomain}`
+    : replitDomains
+      ? `https://${replitDomains}`
+      : `http://localhost:${localPort}`);
+
+const googleClientId = process.env.GOOGLE_CLIENT_ID;
+const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+
+if (!googleClientId) {
+  throw new Error("GOOGLE_CLIENT_ID must be set before starting the API server.");
+}
+
+if (!googleClientSecret) {
+  throw new Error("GOOGLE_CLIENT_SECRET must be set before starting the API server.");
+}
 
 const callbackUrl =
   process.env.GOOGLE_CALLBACK_URL ??
-  `${baseUrl}/api/auth/google/callback`;
+  `${appOrigin}/api/auth/google/callback`;
 
 passport.use(
   new GoogleStrategy(
     {
-      clientID: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      clientID: googleClientId,
+      clientSecret: googleClientSecret,
       callbackURL: callbackUrl,
     },
     async (_accessToken, _refreshToken, profile, done) => {
