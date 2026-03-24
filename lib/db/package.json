@@ -10,7 +10,7 @@
   "scripts": {
     "push": "drizzle-kit push --config ./drizzle.config.ts",
     "push-force": "drizzle-kit push --force --config ./drizzle.config.ts",
-    "create-sessions-table": "tsx src/migrations/create-sessions-table.ts"
+    "create-sessions-table": "node src/migrations/create-sessions-table.js"
   },
   "dependencies": {
     "drizzle-orm": "catalog:",
