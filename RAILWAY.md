@@ -30,6 +30,36 @@ Optional:
 - `GOOGLE_CALLBACK_URL` if you need a callback URL that differs from `APP_ORIGIN`
 - `VITE_API_BASE_URL` only when the frontend must call an API on a different origin
 
+## Data integrations
+
+Workers and Hotels/Sites are populated by syncing from external APIs. Set these variables to enable sync:
+
+| Variable | Purpose |
+|---|---|
+| `WEEKDAYS_API_KEY` | Weekdays CRM — syncs workplaces → Hotels/Sites |
+| `WFCONNECT_API_KEY` | WF Connect — syncs applications → Workers |
+| `WEEKDAYS_API_BASE_URL` | Override the CRM base URL (optional) |
+| `WFCONNECT_API_BASE_URL` | Override the WF Connect base URL (optional) |
+
+### Sync endpoints
+
+Trigger a sync manually (requires a logged-in session or an internal call):
+
+```
+POST /api/sync/hotels    # pulls workplaces from Weekdays CRM
+POST /api/sync/workers   # pulls applications from WF Connect
+GET  /api/sync/status    # returns current counts of workers and hotels
+```
+
+Legacy Render DB sync is still available as a fallback:
+
+```
+POST /api/sync/hotels?source=render
+POST /api/sync/workers?source=render
+```
+
+This requires `RENDER_DATABASE_URL` to be set.
+
 ## First deploy checklist
 
 1. Provision PostgreSQL in Railway.

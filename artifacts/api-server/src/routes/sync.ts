@@ -1,10 +1,96 @@
 import { Router, type IRouter } from "express";
 import pg from "pg";
 import { db, workersTable, hotelsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, count } from "drizzle-orm";
 import { detectRegion } from "../lib/regions";
+import { syncCrmWorkplaces } from "../lib/integrations/crmWorkplaces";
+import { syncWfConnectApplications } from "../lib/integrations/wfconnectApplications";
 
 const router: IRouter = Router();
+
+// ---------------------------------------------------------------------------
+// GET /api/sync/status — counts of locally stored workers and hotels
+// ---------------------------------------------------------------------------
+router.get("/sync/status", async (req, res): Promise<void> => {
+  try {
+    const [{ value: totalWorkers }] = await db
+      .select({ value: count() })
+      .from(workersTable);
+    const [{ value: activeWorkers }] = await db
+      .select({ value: count() })
+      .from(workersTable)
+      .where(eq(workersTable.isActive, true));
+    const [{ value: totalHotels }] = await db
+      .select({ value: count() })
+      .from(hotelsTable);
+    const [{ value: activeHotels }] = await db
+      .select({ value: count() })
+      .from(hotelsTable)
+      .where(eq(hotelsTable.isActive, true));
+
+    res.json({
+      workers: { total: Number(totalWorkers), active: Number(activeWorkers) },
+      hotels: { total: Number(totalHotels), active: Number(activeHotels) },
+    });
+  } catch (err) {
+    req.log.error({ err }, "Failed to get sync status");
+    res.status(500).json({ error: "Failed to get sync status" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/sync/workers
+//   Default source: WF Connect (WFCONNECT_API_KEY)
+//   Legacy source:  ?source=render  (RENDER_DATABASE_URL)
+// ---------------------------------------------------------------------------
+router.post("/sync/workers", async (req, res): Promise<void> => {
+  if (req.query.source === "render") {
+    await syncWorkersFromRender(req, res);
+    return;
+  }
+
+  try {
+    const result = await syncWfConnectApplications();
+    res.json({
+      ...result,
+      message: `Synced ${result.fetched} workers from WF Connect (${result.inserted} new, ${result.updated} updated, ${result.skipped} skipped, ${result.errors} errors)`,
+    });
+  } catch (err) {
+    req.log.error({ err }, "WF Connect worker sync failed");
+    res
+      .status(500)
+      .json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/sync/hotels
+//   Default source: Weekdays CRM (WEEKDAYS_API_KEY)
+//   Legacy source:  ?source=render  (RENDER_DATABASE_URL)
+// ---------------------------------------------------------------------------
+router.post("/sync/hotels", async (req, res): Promise<void> => {
+  if (req.query.source === "render") {
+    await syncHotelsFromRender(req, res);
+    return;
+  }
+
+  try {
+    const result = await syncCrmWorkplaces();
+    res.json({
+      ...result,
+      message: `Synced ${result.fetched} hotels from CRM (${result.inserted} new, ${result.updated} updated, ${result.skipped} skipped, ${result.errors} errors)`,
+    });
+  } catch (err) {
+    req.log.error({ err }, "CRM hotel sync failed");
+    res
+      .status(500)
+      .json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Legacy: sync from RENDER_DATABASE_URL (opt-in via ?source=render)
+// ---------------------------------------------------------------------------
 
 function getRenderClient() {
   return new pg.Client({
@@ -13,7 +99,7 @@ function getRenderClient() {
   });
 }
 
-router.post("/sync/workers", async (req, res): Promise<void> => {
+async function syncWorkersFromRender(req: any, res: any): Promise<void> {
   const client = getRenderClient();
   try {
     await client.connect();
@@ -138,9 +224,9 @@ router.post("/sync/workers", async (req, res): Promise<void> => {
     }
     res.status(500).json({ error: "Sync failed" });
   }
-});
+}
 
-router.post("/sync/hotels", async (req, res): Promise<void> => {
+async function syncHotelsFromRender(req: any, res: any): Promise<void> {
   const client = getRenderClient();
   try {
     await client.connect();
@@ -206,6 +292,6 @@ router.post("/sync/hotels", async (req, res): Promise<void> => {
     }
     res.status(500).json({ error: "Sync failed" });
   }
-});
+}
 
 export default router;
