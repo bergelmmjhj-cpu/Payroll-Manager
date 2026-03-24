@@ -1,8 +1,16 @@
 import { useState } from "react";
-import { useListHotels, useCreateHotel, useUpdateHotel, useDeleteHotel, getListHotelsQueryKey } from "@workspace/api-client-react";
+import {
+  useListHotels,
+  useCreateHotel,
+  useUpdateHotel,
+  useDeleteHotel,
+  useSyncHotels,
+  getListHotelsQueryKey,
+} from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, Button, Input, StatusBadge, Dialog, Label } from "@/components/ui";
-import { Plus, Search, Edit2, Trash2, MapPin } from "lucide-react";
+import { Plus, Search, Edit2, Trash2, MapPin, RefreshCw } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
 import type { Hotel } from "@workspace/api-client-react";
 
 export default function Hotels() {
@@ -15,6 +23,23 @@ export default function Hotels() {
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: getListHotelsQueryKey() });
   const deleteHotel = useDeleteHotel({ mutation: { onSuccess: invalidate }});
+  const syncHotels = useSyncHotels({
+    mutation: {
+      onSuccess: async (result: any) => {
+        await invalidate();
+        toast({
+          title: "Hotels synced",
+          description: result?.message || "Hotels and sites updated successfully.",
+        });
+      },
+      onError: (error: any) => {
+        toast({
+          title: "Hotel sync failed",
+          description: error?.response?.data?.error || error?.message || "Unable to sync hotels.",
+        });
+      },
+    },
+  });
 
   const handleDelete = async (id: number) => {
     if (confirm("Are you sure you want to delete this hotel?")) {
@@ -30,6 +55,9 @@ export default function Hotels() {
           <p className="text-xl text-muted-foreground mt-2">Manage your client worksites and locations.</p>
         </div>
         <div className="flex gap-4">
+          <Button onClick={() => syncHotels.mutate()} variant="outline" className="gap-2" isLoading={syncHotels.isPending}>
+            <RefreshCw className="w-5 h-5" /> Sync Hotels
+          </Button>
           <Button onClick={() => setIsCreating(true)} className="gap-2">
             <Plus className="w-5 h-5" /> Add Hotel
           </Button>
@@ -98,10 +126,15 @@ export default function Hotels() {
                   <td colSpan={5} className="p-12 text-center">
                     <div className="max-w-xl mx-auto space-y-4">
                       <h2 className="text-2xl font-bold text-foreground">No hotels or sites added yet</h2>
-                      <p className="text-lg text-muted-foreground">Add a workplace so hours can be assigned to the correct hotel or site.</p>
-                      <Button onClick={() => setIsCreating(true)} className="gap-2">
-                        <Plus className="w-5 h-5" /> Add First Hotel
-                      </Button>
+                      <p className="text-lg text-muted-foreground">Add a workplace manually or sync hotels from your configured source so hours can be assigned to the correct hotel or site.</p>
+                      <div className="flex flex-wrap justify-center gap-3">
+                        <Button onClick={() => syncHotels.mutate()} variant="outline" className="gap-2" isLoading={syncHotels.isPending}>
+                          <RefreshCw className="w-5 h-5" /> Sync Hotels
+                        </Button>
+                        <Button onClick={() => setIsCreating(true)} className="gap-2">
+                          <Plus className="w-5 h-5" /> Add First Hotel
+                        </Button>
+                      </div>
                     </div>
                   </td>
                 </tr>

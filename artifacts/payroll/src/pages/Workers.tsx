@@ -1,8 +1,16 @@
 import { useState } from "react";
-import { useListWorkers, useCreateWorker, useUpdateWorker, useDeleteWorker, getListWorkersQueryKey } from "@workspace/api-client-react";
+import {
+  useListWorkers,
+  useCreateWorker,
+  useUpdateWorker,
+  useDeleteWorker,
+  useSyncWorkers,
+  getListWorkersQueryKey,
+} from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, Button, Input, StatusBadge, Dialog, Label } from "@/components/ui";
-import { Plus, Search, Edit2, Trash2 } from "lucide-react";
+import { Plus, Search, Edit2, Trash2, RefreshCw } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
 import type { Worker, CreateWorkerBody, UpdateWorkerBody } from "@workspace/api-client-react";
 
 export default function Workers() {
@@ -16,6 +24,23 @@ export default function Workers() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: getListWorkersQueryKey() });
   
   const deleteWorker = useDeleteWorker({ mutation: { onSuccess: invalidate }});
+  const syncWorkers = useSyncWorkers({
+    mutation: {
+      onSuccess: async (result: any) => {
+        await invalidate();
+        toast({
+          title: "Workers synced",
+          description: result?.message || "Workers directory updated successfully.",
+        });
+      },
+      onError: (error: any) => {
+        toast({
+          title: "Worker sync failed",
+          description: error?.response?.data?.error || error?.message || "Unable to sync workers.",
+        });
+      },
+    },
+  });
 
   const handleDelete = async (id: number) => {
     if (confirm("Are you sure you want to delete this worker?")) {
@@ -31,6 +56,9 @@ export default function Workers() {
           <p className="text-xl text-muted-foreground mt-2">Manage your payroll staff and subcontractors.</p>
         </div>
         <div className="flex gap-4">
+          <Button onClick={() => syncWorkers.mutate()} variant="outline" className="gap-2" isLoading={syncWorkers.isPending}>
+            <RefreshCw className="w-5 h-5" /> Sync Workers
+          </Button>
           <Button onClick={() => setIsCreating(true)} className="gap-2">
             <Plus className="w-5 h-5" /> Add Worker
           </Button>
@@ -96,10 +124,15 @@ export default function Workers() {
                   <td colSpan={5} className="p-12 text-center">
                     <div className="max-w-xl mx-auto space-y-4">
                       <h2 className="text-2xl font-bold text-foreground">No workers added yet</h2>
-                      <p className="text-lg text-muted-foreground">Add your first worker so pay periods can accept hours entries.</p>
-                      <Button onClick={() => setIsCreating(true)} className="gap-2">
-                        <Plus className="w-5 h-5" /> Add First Worker
-                      </Button>
+                      <p className="text-lg text-muted-foreground">Add your first worker manually or sync workers from your configured source so pay periods can accept hours entries.</p>
+                      <div className="flex flex-wrap justify-center gap-3">
+                        <Button onClick={() => syncWorkers.mutate()} variant="outline" className="gap-2" isLoading={syncWorkers.isPending}>
+                          <RefreshCw className="w-5 h-5" /> Sync Workers
+                        </Button>
+                        <Button onClick={() => setIsCreating(true)} className="gap-2">
+                          <Plus className="w-5 h-5" /> Add First Worker
+                        </Button>
+                      </div>
                     </div>
                   </td>
                 </tr>
