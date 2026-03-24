@@ -24,6 +24,7 @@ export const timeEntriesTable = pgTable("time_entries", {
   workerName: text("worker_name").notNull(),
   hotelName: text("hotel_name"),
   entryType: text("entry_type").notNull().default("payroll"),
+  workDate: text("work_date"),
   hoursWorked: numeric("hours_worked", { precision: 8, scale: 2 }),
   ratePerHour: numeric("rate_per_hour", { precision: 8, scale: 2 }),
   flatAmount: numeric("flat_amount", { precision: 10, scale: 2 }),

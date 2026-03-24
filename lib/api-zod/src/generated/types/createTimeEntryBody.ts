@@ -13,6 +13,8 @@ export interface CreateTimeEntryBody {
   hotelId?: number | null;
   entryType: CreateTimeEntryBodyEntryType;
   /** @nullable */
+  workDate?: string | null;
+  /** @nullable */
   hoursWorked?: number | null;
   /** @nullable */
   ratePerHour?: number | null;

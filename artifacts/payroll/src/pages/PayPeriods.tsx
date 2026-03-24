@@ -27,11 +27,11 @@ export default function PayPeriods() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-4xl font-extrabold">Pay Periods</h1>
-          <p className="text-xl text-muted-foreground mt-2">Manage workspaces and generate payroll.</p>
+          <p className="text-xl text-muted-foreground mt-2">Open a pay period and enter worker hours directly in the app.</p>
         </div>
         <div className="flex gap-4">
           <Button onClick={() => setLocation('/import')} variant="outline" className="gap-2 bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100">
-            <UploadCloud className="w-5 h-5" /> Import Excel Wizard
+            <UploadCloud className="w-5 h-5" /> Optional Excel Import
           </Button>
           <Button onClick={() => setIsCreating(true)} className="gap-2">
             <Plus className="w-5 h-5" /> New Pay Period
@@ -66,7 +66,7 @@ export default function PayPeriods() {
                 </div>
                 <div className="flex flex-col gap-2">
                   <Button variant="ghost" className="bg-white hover:bg-primary/10 hover:text-primary rounded-xl px-4">
-                    Open Workspace <ArrowRight className="w-4 h-4 ml-2" />
+                    Open & Add Hours <ArrowRight className="w-4 h-4 ml-2" />
                   </Button>
                   <Button variant="ghost" onClick={(e) => handleDelete(period.id, e)} className="text-destructive hover:bg-destructive/10 text-sm h-10">
                     <Trash2 className="w-4 h-4 mr-2" /> Delete

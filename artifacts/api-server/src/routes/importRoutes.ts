@@ -173,6 +173,7 @@ router.post("/import/confirm", async (req, res): Promise<void> => {
           workerName,
           hotelName,
           entryType,
+          workDate: null,
           hoursWorked: hours?.toString() ?? null,
           ratePerHour: rate?.toString() ?? null,
           totalAmount: (total || 0).toString(),

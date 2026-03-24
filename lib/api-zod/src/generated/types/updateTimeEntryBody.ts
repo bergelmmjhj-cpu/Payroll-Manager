@@ -14,6 +14,8 @@ export interface UpdateTimeEntryBody {
   hotelId?: number | null;
   entryType?: UpdateTimeEntryBodyEntryType;
   /** @nullable */
+  workDate?: string | null;
+  /** @nullable */
   hoursWorked?: number | null;
   /** @nullable */
   ratePerHour?: number | null;

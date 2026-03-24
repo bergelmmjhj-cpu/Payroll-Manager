@@ -19,6 +19,8 @@ export interface TimeEntry {
   hotelName?: string | null;
   entryType: TimeEntryEntryType;
   /** @nullable */
+  workDate?: string | null;
+  /** @nullable */
   hoursWorked?: number | null;
   /** @nullable */
   ratePerHour?: number | null;

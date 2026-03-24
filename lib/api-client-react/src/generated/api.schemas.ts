@@ -287,6 +287,8 @@ export interface TimeEntry {
   hotelName?: string | null;
   entryType: TimeEntryEntryType;
   /** @nullable */
+  workDate?: string | null;
+  /** @nullable */
   hoursWorked?: number | null;
   /** @nullable */
   ratePerHour?: number | null;
@@ -404,6 +406,8 @@ export interface CreateTimeEntryBody {
   hotelId?: number | null;
   entryType: CreateTimeEntryBodyEntryType;
   /** @nullable */
+  workDate?: string | null;
+  /** @nullable */
   hoursWorked?: number | null;
   /** @nullable */
   ratePerHour?: number | null;
@@ -443,6 +447,8 @@ export interface UpdateTimeEntryBody {
   /** @nullable */
   hotelId?: number | null;
   entryType?: UpdateTimeEntryBodyEntryType;
+  /** @nullable */
+  workDate?: string | null;
   /** @nullable */
   hoursWorked?: number | null;
   /** @nullable */

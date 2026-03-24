@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, payPeriodsTable, timeEntriesTable, paymentsTable, workersTable, hotelsTable } from "@workspace/db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, asc, desc } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
 const router: IRouter = Router();
@@ -98,7 +98,7 @@ router.get("/pay-periods/:id", async (req, res): Promise<void> => {
     .select()
     .from(timeEntriesTable)
     .where(eq(timeEntriesTable.periodId, id))
-    .orderBy(timeEntriesTable.workerName);
+    .orderBy(asc(timeEntriesTable.workDate), asc(timeEntriesTable.workerName));
 
   const payments = await db
     .select()
@@ -161,14 +161,14 @@ router.get("/pay-periods/:periodId/entries", async (req, res): Promise<void> => 
     .select()
     .from(timeEntriesTable)
     .where(and(...conditions))
-    .orderBy(timeEntriesTable.workerName);
+    .orderBy(asc(timeEntriesTable.workDate), asc(timeEntriesTable.workerName));
 
   res.json(entries.map(mapEntry));
 });
 
 router.post("/pay-periods/:periodId/entries", async (req, res): Promise<void> => {
   const periodId = parseId(req.params.periodId);
-  const { workerId, hotelId, entryType, hoursWorked, ratePerHour, flatAmount, totalAmount, paymentMethod, interacEmail, notes, region } = req.body;
+  const { workerId, hotelId, entryType, workDate, hoursWorked, ratePerHour, flatAmount, totalAmount, paymentMethod, interacEmail, notes, region } = req.body;
 
   if (!workerId || totalAmount === undefined) {
     res.status(400).json({ error: "workerId and totalAmount are required" });
@@ -193,6 +193,7 @@ router.post("/pay-periods/:periodId/entries", async (req, res): Promise<void> =>
       workerName,
       hotelName,
       entryType: entryType || "payroll",
+      workDate: workDate || null,
       hoursWorked: hoursWorked?.toString() ?? null,
       ratePerHour: ratePerHour?.toString() ?? null,
       flatAmount: flatAmount?.toString() ?? null,
@@ -241,6 +242,7 @@ router.post("/pay-periods/:periodId/entries/bulk", async (req, res): Promise<voi
       workerName,
       hotelName,
       entryType: e.entryType || "payroll",
+      workDate: e.workDate || null,
       hoursWorked: e.hoursWorked?.toString() ?? null,
       ratePerHour: e.ratePerHour?.toString() ?? null,
       flatAmount: e.flatAmount?.toString() ?? null,
@@ -268,6 +270,7 @@ router.patch("/pay-periods/:periodId/entries/:id", async (req, res): Promise<voi
   if (body.workerId !== undefined) update.workerId = body.workerId;
   if (body.hotelId !== undefined) update.hotelId = body.hotelId;
   if (body.entryType !== undefined) update.entryType = body.entryType;
+  if (body.workDate !== undefined) update.workDate = body.workDate || null;
   if (body.hoursWorked !== undefined) update.hoursWorked = body.hoursWorked?.toString() ?? null;
   if (body.ratePerHour !== undefined) update.ratePerHour = body.ratePerHour?.toString() ?? null;
   if (body.flatAmount !== undefined) update.flatAmount = body.flatAmount?.toString() ?? null;
@@ -285,6 +288,9 @@ router.patch("/pay-periods/:periodId/entries/:id", async (req, res): Promise<voi
   if (body.hotelId) {
     const [hotel] = await db.select().from(hotelsTable).where(eq(hotelsTable.id, body.hotelId)).limit(1);
     if (hotel) update.hotelName = hotel.name;
+  }
+  if (body.hotelId === null) {
+    update.hotelName = null;
   }
 
   const [entry] = await db
@@ -520,7 +526,7 @@ router.get("/pay-periods/:periodId/export", async (req, res): Promise<void> => {
     .select()
     .from(timeEntriesTable)
     .where(eq(timeEntriesTable.periodId, periodId))
-    .orderBy(timeEntriesTable.workerName);
+    .orderBy(asc(timeEntriesTable.workDate), asc(timeEntriesTable.workerName));
 
   const payments = await db
     .select()
