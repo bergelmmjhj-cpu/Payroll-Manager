@@ -63,7 +63,7 @@ app.use(
     store: new PgSession({
       pool,
       tableName: "sessions",
-      createTableIfMissing: true,
+      createTableIfMissing: false,
     }),
     secret: sessionSecret ?? "mmj-payroll-secret",
     resave: false,

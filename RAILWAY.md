@@ -34,7 +34,7 @@ Optional:
 
 1. Provision PostgreSQL in Railway.
 2. Set all required environment variables.
-3. Run `pnpm run db:push` once against the production database before first boot.
+3. Run `pnpm run db:push` once against the production database before first boot. This pushes the Drizzle schema and also creates the `sessions` table required by `connect-pg-simple`.
 4. Deploy using the build and start commands above.
 5. Verify `GET /api/healthz` returns `200`.
 6. Verify `/` loads the payroll SPA.
