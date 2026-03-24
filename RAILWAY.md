@@ -51,7 +51,11 @@ POST /api/sync/workers   # pulls applications from WF Connect
 GET  /api/sync/status    # returns current counts of workers and hotels
 ```
 
-Legacy Render DB sync is still available as a fallback:
+Legacy Render DB sync is also available through `RENDER_DATABASE_URL`.
+
+- Workers automatically fall back to Render when `WFCONNECT_API_KEY` is missing.
+- Hotels automatically fall back to Render when `WEEKDAYS_API_KEY` is missing.
+- You can still force the legacy source explicitly with these endpoints:
 
 ```
 POST /api/sync/hotels?source=render

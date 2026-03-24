@@ -85,10 +85,29 @@ router.post("/sync/workers", async (req, res): Promise<void> => {
 // ---------------------------------------------------------------------------
 // POST /api/sync/hotels
 //   Default source: Weekdays CRM (WEEKDAYS_API_KEY)
-//   Legacy source:  ?source=render  (RENDER_DATABASE_URL)
+//   Fallback source: Render DB when WEEKDAYS_API_KEY is missing
+//   Force legacy source: ?source=render (RENDER_DATABASE_URL)
 // ---------------------------------------------------------------------------
 router.post("/sync/hotels", async (req, res): Promise<void> => {
-  if (req.query.source === "render") {
+  const forceRender = req.query.source === "render";
+  const hasCrmKey = Boolean(process.env.WEEKDAYS_API_KEY);
+  const hasRenderSource = Boolean(process.env.RENDER_DATABASE_URL);
+
+  if (forceRender || !hasCrmKey) {
+    if (!hasRenderSource) {
+      res.status(400).json({
+        error:
+          "No hotel sync source configured. Set WEEKDAYS_API_KEY or RENDER_DATABASE_URL.",
+      });
+      return;
+    }
+
+    if (!forceRender && !hasCrmKey) {
+      req.log.warn(
+        "WEEKDAYS_API_KEY not set; using legacy Render hotel sync fallback"
+      );
+    }
+
     await syncHotelsFromRender(req, res);
     return;
   }
