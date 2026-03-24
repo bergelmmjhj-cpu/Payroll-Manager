@@ -91,6 +91,19 @@ export default function Workers() {
                   </td>
                 </tr>
               ))}
+              {!isLoading && workers?.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="p-12 text-center">
+                    <div className="max-w-xl mx-auto space-y-4">
+                      <h2 className="text-2xl font-bold text-foreground">No workers added yet</h2>
+                      <p className="text-lg text-muted-foreground">Add your first worker so pay periods can accept hours entries.</p>
+                      <Button onClick={() => setIsCreating(true)} className="gap-2">
+                        <Plus className="w-5 h-5" /> Add First Worker
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

@@ -93,6 +93,19 @@ export default function Hotels() {
                   </td>
                 </tr>
               ))}
+              {!isLoading && hotels?.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="p-12 text-center">
+                    <div className="max-w-xl mx-auto space-y-4">
+                      <h2 className="text-2xl font-bold text-foreground">No hotels or sites added yet</h2>
+                      <p className="text-lg text-muted-foreground">Add a workplace so hours can be assigned to the correct hotel or site.</p>
+                      <Button onClick={() => setIsCreating(true)} className="gap-2">
+                        <Plus className="w-5 h-5" /> Add First Hotel
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

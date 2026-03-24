@@ -92,6 +92,10 @@ export default function PayPeriodDetail({ params }: { params: { id: string } }) 
   const { data: period, isLoading } = useGetPayPeriod(periodId);
   const { data: workers } = useListWorkers();
   const { data: hotels } = useListHotels();
+  const workerCount = workers?.length ?? 0;
+  const hotelCount = hotels?.length ?? 0;
+  const hasWorkers = workerCount > 0;
+  const hasHotels = hotelCount > 0;
 
   const [activeTab, setActiveTab] = useState("hours");
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
@@ -133,7 +137,20 @@ export default function PayPeriodDetail({ params }: { params: { id: string } }) 
   });
 
   if (isLoading) return <div className="p-10 text-2xl animate-pulse text-center">Loading workspace...</div>;
-  if (!period) return <div className="p-10 text-2xl text-destructive text-center">Pay period not found.</div>;
+  if (!period) {
+    return (
+      <Card className="p-10 text-center space-y-6">
+        <div>
+          <h1 className="text-3xl font-black text-destructive mb-3">Pay period not found</h1>
+          <p className="text-lg text-muted-foreground">This pay period link is invalid or the record was deleted.</p>
+        </div>
+        <div className="flex flex-wrap justify-center gap-4">
+          <Button onClick={() => setLocation("/pay-periods")}>Back to Pay Periods</Button>
+          <Button variant="outline" onClick={() => setLocation("/workers")}>Open Workers Directory</Button>
+        </div>
+      </Card>
+    );
+  }
 
   const tabs = [
     { id: "hours", label: "Add Hours", icon: Plus },
@@ -145,6 +162,11 @@ export default function PayPeriodDetail({ params }: { params: { id: string } }) 
   ];
 
   const handleAddEntry = () => {
+    if (!hasWorkers) {
+      setLocation("/workers");
+      return;
+    }
+
     setEditingEntry(null);
     setIsEntryModalOpen(true);
   };
@@ -214,6 +236,40 @@ export default function PayPeriodDetail({ params }: { params: { id: string } }) 
           </div>
         </div>
       </Card>
+
+      {!hasWorkers && (
+        <Card className="p-8 border-amber-200 bg-amber-50">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+            <div className="space-y-2">
+              <h2 className="text-2xl font-bold text-amber-950">Set up workers before entering hours</h2>
+              <p className="text-lg text-amber-900">You need at least one worker before this pay period can accept hours entries.</p>
+              <p className="text-base text-amber-800">Hotels and sites are optional, but recommended so entries can be assigned to a workplace.</p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Button onClick={() => setLocation("/workers")} className="gap-2 bg-amber-900 text-white hover:bg-amber-950">
+                <Users className="w-5 h-5" /> Add Worker
+              </Button>
+              <Button variant="outline" onClick={() => setLocation("/hotels")} className="gap-2 border-amber-300 text-amber-950 hover:bg-amber-100">
+                <Building2 className="w-5 h-5" /> Add Hotel or Site
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {hasWorkers && !hasHotels && (
+        <Card className="p-6 border-sky-200 bg-sky-50">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-bold text-sky-950">No hotels or sites added yet</h2>
+              <p className="text-base text-sky-900">You can still enter hours now and leave the hotel blank, or add workplaces first.</p>
+            </div>
+            <Button variant="outline" onClick={() => setLocation("/hotels")} className="gap-2 border-sky-300 text-sky-950 hover:bg-sky-100">
+              <Building2 className="w-5 h-5" /> Add Hotel or Site
+            </Button>
+          </div>
+        </Card>
+      )}
 
       <div className="flex overflow-x-auto gap-2 pb-2 hide-scrollbar">
         {tabs.map((tab) => (
@@ -646,6 +702,17 @@ function EntryModal({
 
   return (
     <Dialog open={open} onOpenChange={onClose} title={entry ? "Edit Hours" : "Add Hours"}>
+      {workers.length === 0 ? (
+        <div className="space-y-6">
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+            <h3 className="text-xl font-bold text-amber-950 mb-2">No workers available</h3>
+            <p className="text-base text-amber-900">Create a worker first, then come back to this pay period to add hours.</p>
+          </div>
+          <div className="flex justify-end gap-4 border-t border-border pt-6">
+            <Button type="button" variant="ghost" onClick={onClose}>Close</Button>
+          </div>
+        </div>
+      ) : (
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-2 md:col-span-2">
@@ -712,6 +779,7 @@ function EntryModal({
           <Button type="submit" isLoading={isSaving}>{entry ? "Save Changes" : "Add Hours"}</Button>
         </div>
       </form>
+      )}
     </Dialog>
   );
 }
