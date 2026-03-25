@@ -36,14 +36,29 @@ const SELECT_CLASS =
   "flex min-h-[48px] w-full rounded-xl border-2 border-border bg-background px-4 py-2 text-lg focus:border-primary focus:ring-4 outline-none";
 
 type EntryFormState = {
+  payPeriodHotelId: string;
   workerId: string;
   hotelId: string;
+  role: string;
   entryType: "payroll" | "subcontractor";
   workDate: string;
+  regularHours: string;
+  overtimeHours: string;
+  otherHours: string;
+  totalHours: string;
   hoursWorked: string;
   ratePerHour: string;
   flatAmount: string;
   notes: string;
+};
+
+type PayPeriodHotelSection = {
+  id: number;
+  periodId: number;
+  hotelId: number;
+  hotelName: string;
+  region?: string | null;
+  notes?: string | null;
 };
 
 function formatWorkDate(value?: string | null): string {
@@ -60,13 +75,13 @@ function formatWorkDate(value?: string | null): string {
   }
 }
 
-function computeTotalAmount(hoursWorked: string, ratePerHour: string, flatAmount: string): number {
+function computeTotalAmount(totalHours: string, ratePerHour: string, flatAmount: string): number {
   const flat = Number(flatAmount);
   if (flatAmount.trim() && !Number.isNaN(flat)) {
     return flat;
   }
 
-  const hours = Number(hoursWorked);
+  const hours = Number(totalHours);
   const rate = Number(ratePerHour);
   const total = (Number.isNaN(hours) ? 0 : hours) * (Number.isNaN(rate) ? 0 : rate);
   return Number.isFinite(total) ? total : 0;
@@ -74,10 +89,16 @@ function computeTotalAmount(hoursWorked: string, ratePerHour: string, flatAmount
 
 function makeInitialForm(periodStartDate: string, entry?: TimeEntry | null): EntryFormState {
   return {
+    payPeriodHotelId: entry?.payPeriodHotelId != null ? String(entry.payPeriodHotelId) : "",
     workerId: entry?.workerId ? String(entry.workerId) : "",
     hotelId: entry?.hotelId ? String(entry.hotelId) : "",
+    role: entry?.role ?? "",
     entryType: entry?.entryType ?? "payroll",
     workDate: entry?.workDate ?? periodStartDate,
+    regularHours: entry?.regularHours != null ? String(entry.regularHours) : "",
+    overtimeHours: entry?.overtimeHours != null ? String(entry.overtimeHours) : "",
+    otherHours: entry?.otherHours != null ? String(entry.otherHours) : "",
+    totalHours: entry?.totalHours != null ? String(entry.totalHours) : entry?.hoursWorked != null ? String(entry.hoursWorked) : "",
     hoursWorked: entry?.hoursWorked != null ? String(entry.hoursWorked) : "",
     ratePerHour: entry?.ratePerHour != null ? String(entry.ratePerHour) : "",
     flatAmount: entry?.flatAmount != null ? String(entry.flatAmount) : "",
@@ -100,13 +121,33 @@ export default function PayPeriodDetail({ params }: { params: { id: string } }) 
   const [activeTab, setActiveTab] = useState("hours");
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
+  const [selectedSectionHotelId, setSelectedSectionHotelId] = useState<number | null>(null);
+  const [sections, setSections] = useState<PayPeriodHotelSection[]>([]);
+  const [isSectionsLoading, setIsSectionsLoading] = useState(false);
+
+  const fetchSections = async () => {
+    setIsSectionsLoading(true);
+    try {
+      const response = await fetch(`/api/pay-periods/${periodId}/hotels`);
+      if (!response.ok) return;
+      const data = (await response.json()) as PayPeriodHotelSection[];
+      setSections(data);
+    } finally {
+      setIsSectionsLoading(false);
+    }
+  };
 
   const refreshPeriod = async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: getGetPayPeriodQueryKey(periodId) }),
       queryClient.invalidateQueries({ queryKey: getGetPayPeriodTallyQueryKey(periodId) }),
     ]);
+    await fetchSections();
   };
+
+  useEffect(() => {
+    void fetchSections();
+  }, [periodId]);
 
   const createEntry = useCreateTimeEntry({
     mutation: {
@@ -153,6 +194,7 @@ export default function PayPeriodDetail({ params }: { params: { id: string } }) 
   }
 
   const tabs = [
+    { id: "sections", label: "Hotel Sections", icon: Building2 },
     { id: "hours", label: "Add Hours", icon: Plus },
     { id: "hotel", label: "By Hotel", icon: Building2 },
     { id: "worker", label: "By Worker", icon: Users },
@@ -161,19 +203,37 @@ export default function PayPeriodDetail({ params }: { params: { id: string } }) 
     { id: "export", label: "Export", icon: FileDown },
   ];
 
-  const handleAddEntry = () => {
+  const handleAddEntry = (hotelId?: number) => {
     if (!hasWorkers) {
       setLocation("/workers");
       return;
     }
 
+    setSelectedSectionHotelId(hotelId ?? null);
     setEditingEntry(null);
     setIsEntryModalOpen(true);
   };
 
   const handleEditEntry = (entry: TimeEntry) => {
+    setSelectedSectionHotelId(entry.hotelId ?? null);
     setEditingEntry(entry);
     setIsEntryModalOpen(true);
+  };
+
+  const handleAddSection = async (hotelId: number) => {
+    const response = await fetch(`/api/pay-periods/${periodId}/hotels`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ hotelId }),
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      alert(payload?.error || "Failed to add hotel section");
+      return;
+    }
+
+    await fetchSections();
   };
 
   const handleDeleteEntry = async (entry: TimeEntry) => {
@@ -223,7 +283,7 @@ export default function PayPeriodDetail({ params }: { params: { id: string } }) 
           </div>
 
           <div className="flex flex-wrap gap-4">
-            <Button onClick={handleAddEntry} className="bg-white text-primary hover:bg-white/90 gap-2">
+            <Button onClick={() => handleAddEntry()} className="bg-white text-primary hover:bg-white/90 gap-2">
               <Plus className="w-5 h-5" /> Add Hours
             </Button>
             <Button
@@ -293,10 +353,22 @@ export default function PayPeriodDetail({ params }: { params: { id: string } }) 
         {activeTab === "hours" && (
           <HoursEntryTab
             entries={period.entries}
-            onAdd={handleAddEntry}
+            onAdd={() => handleAddEntry()}
             onEdit={handleEditEntry}
             onDelete={handleDeleteEntry}
             isDeleting={deleteEntry.isPending}
+          />
+        )}
+        {activeTab === "sections" && (
+          <HotelSectionsTab
+            periodId={periodId}
+            hotels={hotels ?? []}
+            entries={period.entries}
+            sections={sections}
+            isLoading={isSectionsLoading}
+            onAddSection={handleAddSection}
+            onAddEntry={handleAddEntry}
+            onEditEntry={handleEditEntry}
           />
         )}
         {activeTab === "hotel" && <GroupedEntriesTab entries={period.entries} groupBy="hotelName" />}
@@ -311,8 +383,11 @@ export default function PayPeriodDetail({ params }: { params: { id: string } }) 
         onClose={() => {
           setIsEntryModalOpen(false);
           setEditingEntry(null);
+          setSelectedSectionHotelId(null);
         }}
         entry={editingEntry}
+        defaultHotelId={selectedSectionHotelId}
+        sections={sections}
         periodStartDate={period.startDate}
         workers={workers ?? []}
         hotels={hotels ?? []}
@@ -487,6 +562,139 @@ function GroupedEntriesTab({ entries, groupBy }: { entries: TimeEntry[]; groupBy
   );
 }
 
+function HotelSectionsTab({
+  hotels,
+  entries,
+  sections,
+  isLoading,
+  onAddSection,
+  onAddEntry,
+  onEditEntry,
+}: {
+  periodId: number;
+  hotels: Hotel[];
+  entries: TimeEntry[];
+  sections: PayPeriodHotelSection[];
+  isLoading: boolean;
+  onAddSection: (hotelId: number) => Promise<void>;
+  onAddEntry: (hotelId?: number) => void;
+  onEditEntry: (entry: TimeEntry) => void;
+}) {
+  const [newHotelId, setNewHotelId] = useState("");
+  const [isAdding, setIsAdding] = useState(false);
+
+  const availableHotels = hotels.filter((hotel) => !sections.some((section) => section.hotelId === hotel.id));
+
+  const groupedEntries = entries.reduce<Record<number, TimeEntry[]>>((acc, entry) => {
+    if (!entry.hotelId) return acc;
+    if (!acc[entry.hotelId]) acc[entry.hotelId] = [];
+    acc[entry.hotelId].push(entry);
+    return acc;
+  }, {});
+
+  const handleAddSection = async () => {
+    if (!newHotelId) return;
+    setIsAdding(true);
+    try {
+      await onAddSection(Number(newHotelId));
+      setNewHotelId("");
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card className="p-6 bg-secondary/40">
+        <h2 className="text-2xl font-bold mb-2">Manual Entry by Hotel</h2>
+        <p className="text-muted-foreground mb-4">Create hotel sections first, then add workers and hours directly inside each section.</p>
+        <div className="flex flex-col md:flex-row gap-3">
+          <select value={newHotelId} onChange={(event) => setNewHotelId(event.target.value)} className={SELECT_CLASS}>
+            <option value="">Choose a hotel to add...</option>
+            {availableHotels.map((hotel) => (
+              <option key={hotel.id} value={hotel.id}>{hotel.name}</option>
+            ))}
+          </select>
+          <Button onClick={handleAddSection} disabled={!newHotelId || isAdding}>
+            Add Hotel Section
+          </Button>
+        </div>
+      </Card>
+
+      {isLoading && <Card className="p-6 text-muted-foreground">Loading hotel sections...</Card>}
+
+      {!isLoading && sections.length === 0 && (
+        <Card className="p-8 text-center text-muted-foreground">No hotel sections yet. Add one above to start payroll entry.</Card>
+      )}
+
+      {sections.map((section) => {
+        const sectionEntries = groupedEntries[section.hotelId] ?? [];
+        const sectionTotal = sectionEntries.reduce((sum, entry) => sum + entry.totalAmount, 0);
+
+        return (
+          <Card key={section.id} className="overflow-hidden">
+            <div className="bg-secondary p-4 px-6 border-b flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div>
+                <h3 className="text-2xl font-bold">{section.hotelName}</h3>
+                <p className="text-muted-foreground">{section.region || "No region"} • {sectionEntries.length} entries</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <p className="text-xl font-bold">{formatCurrency(sectionTotal)}</p>
+                <Button onClick={() => onAddEntry(section.hotelId)} className="gap-2">
+                  <Plus className="w-4 h-4" /> Add Worker Hours
+                </Button>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead className="bg-card">
+                  <tr>
+                    <th className="p-4 font-semibold text-muted-foreground">Worker</th>
+                    <th className="p-4 font-semibold text-muted-foreground">Role</th>
+                    <th className="p-4 font-semibold text-muted-foreground text-right">Reg</th>
+                    <th className="p-4 font-semibold text-muted-foreground text-right">OT</th>
+                    <th className="p-4 font-semibold text-muted-foreground text-right">Other</th>
+                    <th className="p-4 font-semibold text-muted-foreground text-right">Total Hours</th>
+                    <th className="p-4 font-semibold text-muted-foreground text-right">Total</th>
+                    <th className="p-4 font-semibold text-muted-foreground text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sectionEntries.length === 0 ? (
+                    <tr className="border-t">
+                      <td className="p-4 text-muted-foreground" colSpan={8}>No entries yet for this hotel section.</td>
+                    </tr>
+                  ) : (
+                    sectionEntries.map((entry) => (
+                      <tr key={entry.id} className="border-t hover:bg-accent/30">
+                        <td className="p-4 font-medium">{entry.workerName}</td>
+                        <td className="p-4 text-muted-foreground">{entry.role || "-"}</td>
+                        <td className="p-4 text-right">{entry.regularHours ?? "-"}</td>
+                        <td className="p-4 text-right">{entry.overtimeHours ?? "-"}</td>
+                        <td className="p-4 text-right">{entry.otherHours ?? "-"}</td>
+                        <td className="p-4 text-right">{entry.totalHours ?? entry.hoursWorked ?? "-"}</td>
+                        <td className="p-4 text-right font-bold">{formatCurrency(entry.totalAmount)}</td>
+                        <td className="p-4">
+                          <div className="flex justify-end">
+                            <Button variant="outline" className="px-3" onClick={() => onEditEntry(entry)}>
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
 function TallyTab({ periodId }: { periodId: number }) {
   const { data: tally, isLoading } = useGetPayPeriodTally(periodId);
 
@@ -628,6 +836,8 @@ function EntryModal({
   open,
   onClose,
   entry,
+  defaultHotelId,
+  sections,
   periodStartDate,
   workers,
   hotels,
@@ -637,6 +847,8 @@ function EntryModal({
   open: boolean;
   onClose: () => void;
   entry: TimeEntry | null;
+  defaultHotelId: number | null;
+  sections: PayPeriodHotelSection[];
   periodStartDate: string;
   workers: Worker[];
   hotels: Hotel[];
@@ -647,11 +859,19 @@ function EntryModal({
 
   useEffect(() => {
     if (!open) return;
-    setForm(makeInitialForm(periodStartDate, entry));
-  }, [open, entry, periodStartDate]);
+    const base = makeInitialForm(periodStartDate, entry);
+    if (!entry && defaultHotelId) {
+      base.hotelId = String(defaultHotelId);
+      const matchingSection = sections.find((section) => section.hotelId === defaultHotelId);
+      base.payPeriodHotelId = matchingSection ? String(matchingSection.id) : "";
+    }
+    setForm(base);
+  }, [open, entry, periodStartDate, defaultHotelId, sections]);
 
   const selectedHotel = hotels.find((hotel) => String(hotel.id) === form.hotelId);
-  const totalAmount = computeTotalAmount(form.hoursWorked, form.ratePerHour, form.flatAmount);
+  const totalHours = Number(form.regularHours || 0) + Number(form.overtimeHours || 0) + Number(form.otherHours || 0);
+  const resolvedTotalHours = form.totalHours.trim() ? Number(form.totalHours) : totalHours;
+  const totalAmount = computeTotalAmount(String(Number.isNaN(resolvedTotalHours) ? 0 : resolvedTotalHours), form.ratePerHour, form.flatAmount);
 
   const updateField = <K extends keyof EntryFormState>(key: K, value: EntryFormState[K]) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -679,17 +899,23 @@ function EntryModal({
       return;
     }
 
-    if (!form.flatAmount.trim() && (!form.hoursWorked.trim() || !form.ratePerHour.trim())) {
+    if (!form.flatAmount.trim() && (!Number.isFinite(resolvedTotalHours) || resolvedTotalHours <= 0 || !form.ratePerHour.trim())) {
       alert("Enter hours and rate, or use a flat amount.");
       return;
     }
 
-    const payload: CreateTimeEntryBody | UpdateTimeEntryBody = {
+    const payload = {
       workerId: Number(form.workerId),
+      payPeriodHotelId: form.payPeriodHotelId ? Number(form.payPeriodHotelId) : null,
       hotelId: form.hotelId ? Number(form.hotelId) : null,
+      role: form.role.trim() || null,
       entryType: form.entryType,
       workDate: form.workDate,
-      hoursWorked: form.hoursWorked.trim() ? Number(form.hoursWorked) : null,
+      regularHours: form.regularHours.trim() ? Number(form.regularHours) : null,
+      overtimeHours: form.overtimeHours.trim() ? Number(form.overtimeHours) : null,
+      otherHours: form.otherHours.trim() ? Number(form.otherHours) : null,
+      totalHours: Number.isFinite(resolvedTotalHours) ? resolvedTotalHours : null,
+      hoursWorked: Number.isFinite(resolvedTotalHours) ? resolvedTotalHours : null,
       ratePerHour: form.ratePerHour.trim() ? Number(form.ratePerHour) : null,
       flatAmount: form.flatAmount.trim() ? Number(form.flatAmount) : null,
       totalAmount,
@@ -697,7 +923,7 @@ function EntryModal({
       region: selectedHotel?.region ?? null,
     };
 
-    await onSubmit(payload);
+    await onSubmit(payload as CreateTimeEntryBody | UpdateTimeEntryBody);
   };
 
   return (
@@ -748,9 +974,39 @@ function EntryModal({
             </select>
           </div>
 
+          <div className="space-y-2 md:col-span-2">
+            <Label>Hotel Section</Label>
+            <select value={form.payPeriodHotelId} onChange={(event) => updateField("payPeriodHotelId", event.target.value)} className={SELECT_CLASS}>
+              <option value="">No section selected</option>
+              {sections.map((section) => (
+                <option key={section.id} value={section.id}>{section.hotelName}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-2 md:col-span-2">
+            <Label>Role / Position</Label>
+            <Input value={form.role} onChange={(event) => updateField("role", event.target.value)} placeholder="Housekeeping, Supervisor, etc." />
+          </div>
+
           <div className="space-y-2">
-            <Label>Hours</Label>
-            <Input type="number" min="0" step="0.25" value={form.hoursWorked} onChange={(event) => updateField("hoursWorked", event.target.value)} placeholder="e.g. 8" />
+            <Label>Regular Hours</Label>
+            <Input type="number" min="0" step="0.25" value={form.regularHours} onChange={(event) => updateField("regularHours", event.target.value)} placeholder="e.g. 8" />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Overtime Hours</Label>
+            <Input type="number" min="0" step="0.25" value={form.overtimeHours} onChange={(event) => updateField("overtimeHours", event.target.value)} placeholder="e.g. 2" />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Other Hours</Label>
+            <Input type="number" min="0" step="0.25" value={form.otherHours} onChange={(event) => updateField("otherHours", event.target.value)} placeholder="e.g. 1" />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Total Hours</Label>
+            <Input type="number" min="0" step="0.25" value={form.totalHours} onChange={(event) => updateField("totalHours", event.target.value)} placeholder={String(totalHours || "auto")}/>
           </div>
 
           <div className="space-y-2">

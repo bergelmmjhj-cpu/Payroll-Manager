@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, payPeriodsTable, timeEntriesTable, paymentsTable, workersTable, hotelsTable } from "@workspace/db";
+import { db, payPeriodsTable, payPeriodHotelsTable, timeEntriesTable, paymentsTable, workersTable, hotelsTable } from "@workspace/db";
 import { eq, and, asc, desc } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
@@ -22,11 +22,29 @@ function mapPeriod(p: typeof payPeriodsTable.$inferSelect) {
 function mapEntry(e: typeof timeEntriesTable.$inferSelect) {
   return {
     ...e,
+    regularHours: e.regularHours ? Number(e.regularHours) : null,
+    overtimeHours: e.overtimeHours ? Number(e.overtimeHours) : null,
+    otherHours: e.otherHours ? Number(e.otherHours) : null,
+    totalHours: e.totalHours ? Number(e.totalHours) : null,
     hoursWorked: e.hoursWorked ? Number(e.hoursWorked) : null,
     ratePerHour: e.ratePerHour ? Number(e.ratePerHour) : null,
     flatAmount: e.flatAmount ? Number(e.flatAmount) : null,
     totalAmount: Number(e.totalAmount),
   };
+}
+
+function mapPeriodHotel(h: typeof payPeriodHotelsTable.$inferSelect) {
+  return h;
+}
+
+async function isPeriodFinalized(periodId: number): Promise<boolean> {
+  const [period] = await db
+    .select({ status: payPeriodsTable.status })
+    .from(payPeriodsTable)
+    .where(eq(payPeriodsTable.id, periodId))
+    .limit(1);
+
+  return period?.status === "finalized";
 }
 
 function mapPayment(p: typeof paymentsTable.$inferSelect) {
@@ -106,11 +124,128 @@ router.get("/pay-periods/:id", async (req, res): Promise<void> => {
     .where(eq(paymentsTable.periodId, id))
     .orderBy(paymentsTable.workerName);
 
+  const periodHotels = await db
+    .select()
+    .from(payPeriodHotelsTable)
+    .where(eq(payPeriodHotelsTable.periodId, id))
+    .orderBy(asc(payPeriodHotelsTable.hotelName));
+
   res.json({
     ...mapPeriod(period),
+    periodHotels: periodHotels.map(mapPeriodHotel),
     entries: entries.map(mapEntry),
     payments: payments.map(mapPayment),
   });
+});
+
+// ─── Pay Period Hotels (Manual Sections) ───────────────────────────────────
+
+router.get("/pay-periods/:periodId/hotels", async (req, res): Promise<void> => {
+  const periodId = parseId(req.params.periodId);
+
+  const rows = await db
+    .select()
+    .from(payPeriodHotelsTable)
+    .where(eq(payPeriodHotelsTable.periodId, periodId))
+    .orderBy(asc(payPeriodHotelsTable.hotelName));
+
+  res.json(rows.map(mapPeriodHotel));
+});
+
+router.post("/pay-periods/:periodId/hotels", async (req, res): Promise<void> => {
+  const periodId = parseId(req.params.periodId);
+  const { hotelId, notes } = req.body;
+
+  if (!hotelId) {
+    res.status(400).json({ error: "hotelId is required" });
+    return;
+  }
+
+  if (await isPeriodFinalized(periodId)) {
+    res.status(409).json({ error: "Cannot change hotels in a finalized pay period" });
+    return;
+  }
+
+  const [hotel] = await db.select().from(hotelsTable).where(eq(hotelsTable.id, hotelId)).limit(1);
+  if (!hotel) {
+    res.status(404).json({ error: "Hotel not found" });
+    return;
+  }
+
+  const [existing] = await db
+    .select()
+    .from(payPeriodHotelsTable)
+    .where(and(eq(payPeriodHotelsTable.periodId, periodId), eq(payPeriodHotelsTable.hotelId, hotelId)))
+    .limit(1);
+
+  if (existing) {
+    res.json(mapPeriodHotel(existing));
+    return;
+  }
+
+  const [row] = await db
+    .insert(payPeriodHotelsTable)
+    .values({
+      periodId,
+      hotelId,
+      hotelName: hotel.name,
+      region: hotel.region ?? null,
+      notes: notes || null,
+    })
+    .returning();
+
+  res.status(201).json(mapPeriodHotel(row));
+});
+
+router.patch("/pay-periods/:periodId/hotels/:id", async (req, res): Promise<void> => {
+  const periodId = parseId(req.params.periodId);
+  const id = parseId(req.params.id);
+  const { notes } = req.body;
+
+  if (await isPeriodFinalized(periodId)) {
+    res.status(409).json({ error: "Cannot change hotels in a finalized pay period" });
+    return;
+  }
+
+  const [row] = await db
+    .update(payPeriodHotelsTable)
+    .set({ notes: notes ?? null })
+    .where(and(eq(payPeriodHotelsTable.id, id), eq(payPeriodHotelsTable.periodId, periodId)))
+    .returning();
+
+  if (!row) {
+    res.status(404).json({ error: "Pay period hotel not found" });
+    return;
+  }
+
+  res.json(mapPeriodHotel(row));
+});
+
+router.delete("/pay-periods/:periodId/hotels/:id", async (req, res): Promise<void> => {
+  const periodId = parseId(req.params.periodId);
+  const id = parseId(req.params.id);
+
+  if (await isPeriodFinalized(periodId)) {
+    res.status(409).json({ error: "Cannot change hotels in a finalized pay period" });
+    return;
+  }
+
+  const [row] = await db
+    .delete(payPeriodHotelsTable)
+    .where(and(eq(payPeriodHotelsTable.id, id), eq(payPeriodHotelsTable.periodId, periodId)))
+    .returning();
+
+  if (!row) {
+    res.status(404).json({ error: "Pay period hotel not found" });
+    return;
+  }
+
+  await db
+    .update(timeEntriesTable)
+    .set({ payPeriodHotelId: null })
+    .where(and(eq(timeEntriesTable.periodId, periodId), eq(timeEntriesTable.payPeriodHotelId, id)));
+
+  res.sendStatus(204);
 });
 
 router.patch("/pay-periods/:id", async (req, res): Promise<void> => {
@@ -168,12 +303,42 @@ router.get("/pay-periods/:periodId/entries", async (req, res): Promise<void> => 
 
 router.post("/pay-periods/:periodId/entries", async (req, res): Promise<void> => {
   const periodId = parseId(req.params.periodId);
-  const { workerId, hotelId, entryType, workDate, hoursWorked, ratePerHour, flatAmount, totalAmount, paymentMethod, interacEmail, notes, region } = req.body;
+  const {
+    workerId,
+    hotelId,
+    payPeriodHotelId,
+    role,
+    entryType,
+    workDate,
+    regularHours,
+    overtimeHours,
+    otherHours,
+    totalHours,
+    hoursWorked,
+    ratePerHour,
+    flatAmount,
+    totalAmount,
+    paymentMethod,
+    interacEmail,
+    notes,
+    region,
+  } = req.body;
 
-  if (!workerId || totalAmount === undefined) {
-    res.status(400).json({ error: "workerId and totalAmount are required" });
+  if (await isPeriodFinalized(periodId)) {
+    res.status(409).json({ error: "Cannot add entries to a finalized pay period" });
     return;
   }
+
+  if (!workerId) {
+    res.status(400).json({ error: "workerId is required" });
+    return;
+  }
+
+  const resolvedHours = totalHours ?? hoursWorked ?? (Number(regularHours || 0) + Number(overtimeHours || 0) + Number(otherHours || 0));
+  const resolvedAmount =
+    totalAmount ??
+    flatAmount ??
+    (Number.isFinite(Number(resolvedHours)) && Number.isFinite(Number(ratePerHour)) ? Number(resolvedHours) * Number(ratePerHour) : 0);
 
   const [worker] = await db.select().from(workersTable).where(eq(workersTable.id, workerId)).limit(1);
   const workerName = worker?.name || "Unknown";
@@ -188,16 +353,22 @@ router.post("/pay-periods/:periodId/entries", async (req, res): Promise<void> =>
     .insert(timeEntriesTable)
     .values({
       periodId,
+      payPeriodHotelId: payPeriodHotelId || null,
       workerId,
       hotelId: hotelId || null,
       workerName,
       hotelName,
+      role: role || null,
       entryType: entryType || "payroll",
       workDate: workDate || null,
-      hoursWorked: hoursWorked?.toString() ?? null,
+      regularHours: regularHours?.toString() ?? null,
+      overtimeHours: overtimeHours?.toString() ?? null,
+      otherHours: otherHours?.toString() ?? null,
+      totalHours: resolvedHours?.toString() ?? null,
+      hoursWorked: resolvedHours?.toString() ?? null,
       ratePerHour: ratePerHour?.toString() ?? null,
       flatAmount: flatAmount?.toString() ?? null,
-      totalAmount: totalAmount.toString(),
+      totalAmount: resolvedAmount.toString(),
       paymentStatus: "pending",
       paymentMethod: paymentMethod || worker?.paymentMethod || null,
       interacEmail: interacEmail || worker?.interacEmail || null,
@@ -213,6 +384,11 @@ router.post("/pay-periods/:periodId/entries", async (req, res): Promise<void> =>
 router.post("/pay-periods/:periodId/entries/bulk", async (req, res): Promise<void> => {
   const periodId = parseId(req.params.periodId);
   const { entries, replaceAll } = req.body;
+
+  if (await isPeriodFinalized(periodId)) {
+    res.status(409).json({ error: "Cannot modify entries in a finalized pay period" });
+    return;
+  }
 
   if (!Array.isArray(entries)) {
     res.status(400).json({ error: "entries must be an array" });
@@ -237,13 +413,19 @@ router.post("/pay-periods/:periodId/entries/bulk", async (req, res): Promise<voi
 
     await db.insert(timeEntriesTable).values({
       periodId,
+      payPeriodHotelId: e.payPeriodHotelId || null,
       workerId: e.workerId,
       hotelId: e.hotelId || null,
       workerName,
       hotelName,
+      role: e.role || null,
       entryType: e.entryType || "payroll",
       workDate: e.workDate || null,
-      hoursWorked: e.hoursWorked?.toString() ?? null,
+      regularHours: e.regularHours?.toString() ?? null,
+      overtimeHours: e.overtimeHours?.toString() ?? null,
+      otherHours: e.otherHours?.toString() ?? null,
+      totalHours: (e.totalHours ?? e.hoursWorked)?.toString() ?? null,
+      hoursWorked: (e.totalHours ?? e.hoursWorked)?.toString() ?? null,
       ratePerHour: e.ratePerHour?.toString() ?? null,
       flatAmount: e.flatAmount?.toString() ?? null,
       totalAmount: (e.totalAmount || 0).toString(),
@@ -266,11 +448,25 @@ router.patch("/pay-periods/:periodId/entries/:id", async (req, res): Promise<voi
   const periodId = parseId(req.params.periodId);
   const body = req.body;
 
+  if (await isPeriodFinalized(periodId)) {
+    res.status(409).json({ error: "Cannot edit entries in a finalized pay period" });
+    return;
+  }
+
   const update: Partial<typeof timeEntriesTable.$inferInsert> = {};
+  if (body.payPeriodHotelId !== undefined) update.payPeriodHotelId = body.payPeriodHotelId;
   if (body.workerId !== undefined) update.workerId = body.workerId;
   if (body.hotelId !== undefined) update.hotelId = body.hotelId;
+  if (body.role !== undefined) update.role = body.role;
   if (body.entryType !== undefined) update.entryType = body.entryType;
   if (body.workDate !== undefined) update.workDate = body.workDate || null;
+  if (body.regularHours !== undefined) update.regularHours = body.regularHours?.toString() ?? null;
+  if (body.overtimeHours !== undefined) update.overtimeHours = body.overtimeHours?.toString() ?? null;
+  if (body.otherHours !== undefined) update.otherHours = body.otherHours?.toString() ?? null;
+  if (body.totalHours !== undefined) {
+    update.totalHours = body.totalHours?.toString() ?? null;
+    update.hoursWorked = body.totalHours?.toString() ?? null;
+  }
   if (body.hoursWorked !== undefined) update.hoursWorked = body.hoursWorked?.toString() ?? null;
   if (body.ratePerHour !== undefined) update.ratePerHour = body.ratePerHour?.toString() ?? null;
   if (body.flatAmount !== undefined) update.flatAmount = body.flatAmount?.toString() ?? null;
@@ -311,6 +507,11 @@ router.patch("/pay-periods/:periodId/entries/:id", async (req, res): Promise<voi
 router.delete("/pay-periods/:periodId/entries/:id", async (req, res): Promise<void> => {
   const id = parseId(req.params.id);
   const periodId = parseId(req.params.periodId);
+
+  if (await isPeriodFinalized(periodId)) {
+    res.status(409).json({ error: "Cannot delete entries in a finalized pay period" });
+    return;
+  }
 
   const [entry] = await db
     .delete(timeEntriesTable)

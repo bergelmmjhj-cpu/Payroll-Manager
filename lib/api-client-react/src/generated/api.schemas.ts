@@ -279,15 +279,27 @@ export const TimeEntryPaymentStatus = {
 export interface TimeEntry {
   id: number;
   periodId: number;
+  /** @nullable */
+  payPeriodHotelId?: number | null;
   workerId: number;
   /** @nullable */
   hotelId?: number | null;
   workerName: string;
   /** @nullable */
   hotelName?: string | null;
+  /** @nullable */
+  role?: string | null;
   entryType: TimeEntryEntryType;
   /** @nullable */
   workDate?: string | null;
+  /** @nullable */
+  regularHours?: number | null;
+  /** @nullable */
+  overtimeHours?: number | null;
+  /** @nullable */
+  otherHours?: number | null;
+  /** @nullable */
+  totalHours?: number | null;
   /** @nullable */
   hoursWorked?: number | null;
   /** @nullable */
@@ -361,8 +373,22 @@ export interface PayPeriodDetail {
   notes?: string | null;
   createdAt: string;
   updatedAt: string;
+  periodHotels?: PayPeriodHotel[];
   entries: TimeEntry[];
   payments: Payment[];
+}
+
+export interface PayPeriodHotel {
+  id: number;
+  periodId: number;
+  hotelId: number;
+  hotelName: string;
+  /** @nullable */
+  region?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface CreatePayPeriodBody {
@@ -403,10 +429,22 @@ export const CreateTimeEntryBodyEntryType = {
 export interface CreateTimeEntryBody {
   workerId: number;
   /** @nullable */
+  payPeriodHotelId?: number | null;
+  /** @nullable */
   hotelId?: number | null;
+  /** @nullable */
+  role?: string | null;
   entryType: CreateTimeEntryBodyEntryType;
   /** @nullable */
   workDate?: string | null;
+  /** @nullable */
+  regularHours?: number | null;
+  /** @nullable */
+  overtimeHours?: number | null;
+  /** @nullable */
+  otherHours?: number | null;
+  /** @nullable */
+  totalHours?: number | null;
   /** @nullable */
   hoursWorked?: number | null;
   /** @nullable */
@@ -445,10 +483,22 @@ export const UpdateTimeEntryBodyPaymentStatus = {
 export interface UpdateTimeEntryBody {
   workerId?: number;
   /** @nullable */
+  payPeriodHotelId?: number | null;
+  /** @nullable */
   hotelId?: number | null;
+  /** @nullable */
+  role?: string | null;
   entryType?: UpdateTimeEntryBodyEntryType;
   /** @nullable */
   workDate?: string | null;
+  /** @nullable */
+  regularHours?: number | null;
+  /** @nullable */
+  overtimeHours?: number | null;
+  /** @nullable */
+  otherHours?: number | null;
+  /** @nullable */
+  totalHours?: number | null;
   /** @nullable */
   hoursWorked?: number | null;
   /** @nullable */
