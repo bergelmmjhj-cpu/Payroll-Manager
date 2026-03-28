@@ -16,7 +16,7 @@ export interface SyncResult {
 }
 
 /**
- * Expected shape from the WF Connect /admin/applications endpoint.
+ * Expected shape from the WF Connect API applications endpoint.
  * Actual field names vary — the integration handles common variants.
  */
 interface WfApplication {
@@ -103,20 +103,48 @@ export async function syncWfConnectApplications(): Promise<SyncResult> {
     );
   }
 
-  const url = `${apiBase}/admin/applications`;
-  logger.info({ url }, "Fetching applications from WF Connect");
+  const candidateUrls = [
+    `${apiBase}/api/admin/applications`,
+    `${apiBase}/admin/applications`,
+  ];
+  let response: Response | undefined;
+  let url = candidateUrls[0];
 
-  const response = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-  });
+  for (const candidateUrl of candidateUrls) {
+    logger.info({ url: candidateUrl }, "Fetching applications from WF Connect");
+    const candidateResponse = await fetch(candidateUrl, {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    // Prefer an endpoint that does not return HTML for successful responses.
+    if (!candidateResponse.ok) {
+      response = candidateResponse;
+      url = candidateUrl;
+      break;
+    }
+
+    const contentType = candidateResponse.headers.get("content-type") ?? "";
+    if (!contentType.toLowerCase().includes("text/html")) {
+      response = candidateResponse;
+      url = candidateUrl;
+      break;
+    }
+
+    response = candidateResponse;
+    url = candidateUrl;
+  }
+
+  if (!response) {
+    throw new Error("WF Connect API request did not produce a response");
+  }
 
   if (!response.ok) {
     const body = await response.text();
     throw new Error(
-      `WF Connect API responded ${response.status}: ${body.slice(0, 300)}`
+      `WF Connect API responded ${response.status} from ${url}: ${body.slice(0, 300)}`
     );
   }
 
@@ -132,7 +160,7 @@ export async function syncWfConnectApplications(): Promise<SyncResult> {
     const preview = bodyText.slice(0, 200);
     if (bodyText.trimStart().startsWith("<")) {
       throw new Error(
-        "WF Connect API returned HTML instead of JSON. Check WFCONNECT_API_BASE_URL (must be https://guide.wfconnect.org with no trailing /admin path)."
+        "WF Connect API returned HTML instead of JSON. Check WFCONNECT_API_BASE_URL and API path configuration."
       );
     }
 
