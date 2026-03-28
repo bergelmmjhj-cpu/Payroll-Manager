@@ -45,6 +45,18 @@ type WfApiResponse =
   | { results: WfApplication[] }
   | { applications: WfApplication[] };
 
+function normalizeWfConnectBaseUrl(rawBase?: string): string {
+  const fallback = "https://guide.wfconnect.org";
+  const trimmed = (rawBase ?? fallback).trim();
+  const withoutTrailingSlash = trimmed.replace(/\/+$/, "");
+
+  // Accept common misconfigurations like .../admin or .../admin/applications.
+  return withoutTrailingSlash.replace(
+    /\/admin(?:\/applications)?$/i,
+    ""
+  );
+}
+
 function extractApplications(raw: WfApiResponse): WfApplication[] {
   if (Array.isArray(raw)) return raw;
   if ("data" in raw && Array.isArray(raw.data)) return raw.data;
@@ -74,11 +86,21 @@ function isApprovedStatus(status?: string): boolean {
  */
 export async function syncWfConnectApplications(): Promise<SyncResult> {
   const apiKey = process.env.WFCONNECT_API_KEY;
-  const apiBase =
-    process.env.WFCONNECT_API_BASE_URL ?? "https://guide.wfconnect.org";
+  const rawApiBase = process.env.WFCONNECT_API_BASE_URL;
+  const apiBase = normalizeWfConnectBaseUrl(rawApiBase);
 
   if (!apiKey) {
     throw new Error("WFCONNECT_API_KEY is not set");
+  }
+
+  if (rawApiBase && rawApiBase.trim() !== apiBase) {
+    logger.warn(
+      {
+        configuredBaseUrl: rawApiBase,
+        normalizedBaseUrl: apiBase,
+      },
+      "Normalizing WFCONNECT_API_BASE_URL for worker sync"
+    );
   }
 
   const url = `${apiBase}/admin/applications`;
