@@ -29,6 +29,12 @@ export interface CreateWorkerBody {
   /** @nullable */
   bankName?: string | null;
   /** @nullable */
+  institutionNumber?: string | null;
+  /** @nullable */
+  transitNumber?: string | null;
+  /** @nullable */
+  accountNumber?: string | null;
+  /** @nullable */
   bankAccount?: string | null;
   /** @nullable */
   sinNumber?: string | null;

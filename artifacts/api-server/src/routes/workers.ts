@@ -58,6 +58,9 @@ router.post("/workers", async (req, res): Promise<void> => {
     interacEmail,
     paymentMethod,
     bankName,
+    institutionNumber,
+    transitNumber,
+    accountNumber,
     bankAccount,
     sinNumber,
     notes,
@@ -82,6 +85,9 @@ router.post("/workers", async (req, res): Promise<void> => {
       interacEmail,
       paymentMethod,
       bankName,
+      institutionNumber,
+      transitNumber,
+      accountNumber,
       bankAccount,
       sinNumber,
       notes,
@@ -119,6 +125,9 @@ router.patch("/workers/:id", async (req, res): Promise<void> => {
     interacEmail,
     paymentMethod,
     bankName,
+    institutionNumber,
+    transitNumber,
+    accountNumber,
     bankAccount,
     sinNumber,
     notes,
@@ -137,6 +146,9 @@ router.patch("/workers/:id", async (req, res): Promise<void> => {
   if (interacEmail !== undefined) update.interacEmail = interacEmail;
   if (paymentMethod !== undefined) update.paymentMethod = paymentMethod;
   if (bankName !== undefined) update.bankName = bankName;
+  if (institutionNumber !== undefined) update.institutionNumber = institutionNumber;
+  if (transitNumber !== undefined) update.transitNumber = transitNumber;
+  if (accountNumber !== undefined) update.accountNumber = accountNumber;
   if (bankAccount !== undefined) update.bankAccount = bankAccount;
   if (sinNumber !== undefined) update.sinNumber = sinNumber;
   if (notes !== undefined) update.notes = notes;

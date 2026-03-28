@@ -69,6 +69,19 @@ interface WfApplication {
   is_active?: boolean;
   active?: boolean;
   notes?: string;
+  payment_method?: string;
+  bank_name?: string;
+  institution_number?: string | number;
+  transit_number?: string | number;
+  account_number?: string | number;
+  etransfer_email?: string;
+
+  paymentMethod?: string;
+  bankName?: string;
+  institutionNumber?: string | number;
+  transitNumber?: string | number;
+  accountNumber?: string | number;
+  etransferEmail?: string;
 }
 
 type WfApiResponse =
@@ -143,6 +156,135 @@ function resolveName(app: WfApplication): string {
 
 function isApprovedStatus(status?: string): boolean {
   return (status ?? "").trim().toLowerCase() === "approved";
+}
+
+function normalizeString(value: unknown): string | undefined {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  if (typeof value === "number") {
+    return String(value);
+  }
+
+  return undefined;
+}
+
+function getPathValue(obj: unknown, path: string): unknown {
+  if (!obj || typeof obj !== "object") return undefined;
+
+  return path.split(".").reduce<unknown>((current, segment) => {
+    if (!current || typeof current !== "object") return undefined;
+    return (current as Record<string, unknown>)[segment];
+  }, obj);
+}
+
+function pickFirstString(obj: unknown, paths: string[]): string | undefined {
+  for (const path of paths) {
+    const value = normalizeString(getPathValue(obj, path));
+    if (value !== undefined) return value;
+  }
+  return undefined;
+}
+
+function normalizePaymentMethod(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+
+  const normalized = value.trim().toLowerCase();
+  if (["direct deposit", "direct_deposit", "direct-deposit"].includes(normalized)) {
+    return "Direct Deposit";
+  }
+
+  if (["e-transfer", "etransfer", "e_transfer", "interac"].includes(normalized)) {
+    return "E-Transfer";
+  }
+
+  return value;
+}
+
+interface ParsedPaymentFields {
+  paymentMethod?: string;
+  bankName?: string;
+  institutionNumber?: string;
+  transitNumber?: string;
+  accountNumber?: string;
+  bankAccount?: string;
+  interacEmail?: string;
+}
+
+function extractPaymentFields(app: WfApplication): ParsedPaymentFields {
+  const paymentMethodRaw = pickFirstString(app, [
+    "payment_method",
+    "paymentMethod",
+    "payment_information.payment_method",
+    "payment_information.paymentMethod",
+    "payment_information.method",
+    "paymentInfo.paymentMethod",
+    "paymentProfile.paymentMethod",
+  ]);
+
+  const bankName = pickFirstString(app, [
+    "bank_name",
+    "bankName",
+    "payment_information.bank_name",
+    "payment_information.bankName",
+    "paymentInfo.bankName",
+    "paymentProfile.bankName",
+  ]);
+
+  const institutionNumber = pickFirstString(app, [
+    "institution_number",
+    "institutionNumber",
+    "payment_information.institution_number",
+    "payment_information.institutionNumber",
+    "paymentInfo.institutionNumber",
+    "paymentProfile.institutionNumber",
+  ]);
+
+  const transitNumber = pickFirstString(app, [
+    "transit_number",
+    "transitNumber",
+    "payment_information.transit_number",
+    "payment_information.transitNumber",
+    "paymentInfo.transitNumber",
+    "paymentProfile.transitNumber",
+  ]);
+
+  const accountNumber = pickFirstString(app, [
+    "account_number",
+    "accountNumber",
+    "payment_information.account_number",
+    "payment_information.accountNumber",
+    "paymentInfo.accountNumber",
+    "paymentProfile.accountNumber",
+    "bank_account",
+    "bankAccount",
+  ]);
+
+  const interacEmail = pickFirstString(app, [
+    "etransfer_email",
+    "etransferEmail",
+    "e_transfer_email",
+    "interac_email",
+    "interacEmail",
+    "payment_information.etransfer_email",
+    "payment_information.interac_email",
+    "paymentInfo.etransferEmail",
+    "paymentInfo.interacEmail",
+    "paymentProfile.etransferEmail",
+    "paymentProfile.interacEmail",
+  ]);
+
+  return {
+    paymentMethod: normalizePaymentMethod(paymentMethodRaw),
+    bankName,
+    institutionNumber,
+    transitNumber,
+    accountNumber,
+    bankAccount: accountNumber,
+    interacEmail,
+  };
 }
 
 function computeBackoffDelayMs(attempt: number): number {
@@ -404,7 +546,9 @@ export async function syncWfConnectApplications(): Promise<SyncResult> {
     try {
       const renderDbId = `wfconnect_${app.id}`;
 
-      const record = {
+      const payment = extractPaymentFields(app);
+
+      const baseRecord = {
         name,
         email: app.email ?? null,
         phone: app.phone ?? null,
@@ -417,19 +561,41 @@ export async function syncWfConnectApplications(): Promise<SyncResult> {
       };
 
       const existing = await db
-        .select({ id: workersTable.id })
+        .select()
         .from(workersTable)
         .where(eq(workersTable.renderDbId, renderDbId))
         .limit(1);
 
       if (existing.length > 0) {
+        const current = existing[0];
+
+        const paymentRecord = {
+          paymentMethod: payment.paymentMethod ?? current.paymentMethod ?? null,
+          bankName: payment.bankName ?? current.bankName ?? null,
+          institutionNumber: payment.institutionNumber ?? current.institutionNumber ?? null,
+          transitNumber: payment.transitNumber ?? current.transitNumber ?? null,
+          accountNumber: payment.accountNumber ?? current.accountNumber ?? null,
+          bankAccount: payment.bankAccount ?? current.bankAccount ?? null,
+          interacEmail: payment.interacEmail ?? current.interacEmail ?? null,
+        };
+
         await db
           .update(workersTable)
-          .set(record)
+          .set({ ...baseRecord, ...paymentRecord })
           .where(eq(workersTable.renderDbId, renderDbId));
         updated++;
       } else {
-        await db.insert(workersTable).values({ renderDbId, ...record });
+        await db.insert(workersTable).values({
+          renderDbId,
+          ...baseRecord,
+          paymentMethod: payment.paymentMethod ?? null,
+          bankName: payment.bankName ?? null,
+          institutionNumber: payment.institutionNumber ?? null,
+          transitNumber: payment.transitNumber ?? null,
+          accountNumber: payment.accountNumber ?? null,
+          bankAccount: payment.bankAccount ?? null,
+          interacEmail: payment.interacEmail ?? null,
+        });
         inserted++;
       }
     } catch (err) {

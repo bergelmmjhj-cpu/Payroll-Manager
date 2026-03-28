@@ -1259,6 +1259,12 @@ components:
           type: ["string", "null"]
         bankName:
           type: ["string", "null"]
+        institutionNumber:
+          type: ["string", "null"]
+        transitNumber:
+          type: ["string", "null"]
+        accountNumber:
+          type: ["string", "null"]
         bankAccount:
           type: ["string", "null"]
         sinNumber:
@@ -1297,6 +1303,12 @@ components:
           type: ["string", "null"]
         bankName:
           type: ["string", "null"]
+        institutionNumber:
+          type: ["string", "null"]
+        transitNumber:
+          type: ["string", "null"]
+        accountNumber:
+          type: ["string", "null"]
         bankAccount:
           type: ["string", "null"]
         sinNumber:
@@ -1332,6 +1344,12 @@ components:
         paymentMethod:
           type: ["string", "null"]
         bankName:
+          type: ["string", "null"]
+        institutionNumber:
+          type: ["string", "null"]
+        transitNumber:
+          type: ["string", "null"]
+        accountNumber:
           type: ["string", "null"]
         bankAccount:
           type: ["string", "null"]

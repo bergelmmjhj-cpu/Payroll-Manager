@@ -13,6 +13,68 @@ import { Plus, Search, Edit2, Trash2, RefreshCw } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { Worker, CreateWorkerBody, UpdateWorkerBody } from "@workspace/api-client-react";
 
+type PaymentMethodKind = "direct_deposit" | "etransfer" | "cheque" | "cash" | "other" | "not_set";
+
+function normalizeValue(value: FormDataEntryValue | string | null | undefined): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizePaymentMethodKind(value: string | null | undefined): PaymentMethodKind {
+  const normalized = (value ?? "").trim().toLowerCase();
+  if (!normalized) return "not_set";
+  if (["direct deposit", "direct_deposit", "direct-deposit"].includes(normalized)) return "direct_deposit";
+  if (["e-transfer", "etransfer", "e_transfer", "interac"].includes(normalized)) return "etransfer";
+  if (normalized === "cheque") return "cheque";
+  if (normalized === "cash") return "cash";
+  return "other";
+}
+
+function hasBankDetails(worker: Worker): boolean {
+  return Boolean(
+    worker.bankName ||
+      worker.institutionNumber ||
+      worker.transitNumber ||
+      worker.accountNumber ||
+      worker.bankAccount,
+  );
+}
+
+function resolvePrimaryPayment(worker: Worker): { label: string; methodKind: PaymentMethodKind } {
+  const methodKind = normalizePaymentMethodKind(worker.paymentMethod);
+  const hasInterac = Boolean(worker.interacEmail);
+  const hasBank = hasBankDetails(worker);
+
+  if (methodKind === "direct_deposit") return { label: "Direct Deposit", methodKind };
+  if (methodKind === "etransfer") return { label: "E-Transfer", methodKind };
+  if (methodKind === "cheque") return { label: "Cheque", methodKind };
+  if (methodKind === "cash") return { label: "Cash", methodKind };
+  if (methodKind === "other") return { label: worker.paymentMethod ?? "Not set", methodKind };
+
+  if (hasInterac) {
+    return { label: "E-Transfer", methodKind: "etransfer" };
+  }
+
+  if (hasBank) {
+    return { label: "Direct Deposit", methodKind: "direct_deposit" };
+  }
+
+  return { label: "Not set", methodKind: "not_set" };
+}
+
+function renderBankSummary(worker: Worker): string | null {
+  const accountNumber = worker.accountNumber ?? worker.bankAccount;
+  const parts = [
+    worker.bankName ? `Bank: ${worker.bankName}` : null,
+    worker.institutionNumber ? `Institution: ${worker.institutionNumber}` : null,
+    worker.transitNumber ? `Transit: ${worker.transitNumber}` : null,
+    accountNumber ? `Account: ${accountNumber}` : null,
+  ].filter(Boolean);
+
+  return parts.length > 0 ? parts.join(" | ") : null;
+}
+
 export default function Workers() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
@@ -106,8 +168,30 @@ export default function Workers() {
                     )}
                   </td>
                   <td className="p-5">
-                    <p className="text-lg font-medium capitalize">{worker.paymentMethod || 'Not set'}</p>
-                    {worker.interacEmail && <p className="text-base text-muted-foreground">{worker.interacEmail}</p>}
+                    {(() => {
+                      const primary = resolvePrimaryPayment(worker);
+                      const bankSummary = renderBankSummary(worker);
+                      const showInteracAsSecondary = primary.methodKind !== "etransfer" && Boolean(worker.interacEmail);
+                      const showBankAsSecondary = primary.methodKind !== "direct_deposit" && Boolean(bankSummary);
+
+                      return (
+                        <>
+                          <p className="text-lg font-medium">{primary.label}</p>
+                          {primary.methodKind === "direct_deposit" && bankSummary && (
+                            <p className="text-base text-muted-foreground">{bankSummary}</p>
+                          )}
+                          {primary.methodKind === "etransfer" && worker.interacEmail && (
+                            <p className="text-base text-muted-foreground">{worker.interacEmail}</p>
+                          )}
+                          {showInteracAsSecondary && (
+                            <p className="text-sm text-muted-foreground">Also on file: E-Transfer {worker.interacEmail}</p>
+                          )}
+                          {showBankAsSecondary && (
+                            <p className="text-sm text-muted-foreground">Also on file: Direct Deposit {bankSummary}</p>
+                          )}
+                        </>
+                      );
+                    })()}
                   </td>
                   <td className="p-5">
                     <StatusBadge status={worker.isActive ? 'ready' : 'draft'} />
@@ -156,29 +240,47 @@ export default function Workers() {
 }
 
 function WorkerModal({ open, onClose, worker, onSuccess }: { open: boolean, onClose: () => void, worker: Worker | null, onSuccess: () => void }) {
-  const queryClient = useQueryClient();
   const create = useCreateWorker({ mutation: { onSuccess: () => { onSuccess(); onClose(); } }});
   const update = useUpdateWorker({ mutation: { onSuccess: () => { onSuccess(); onClose(); } }});
+
+  const paymentMethodValue = worker?.paymentMethod ?? "";
+  const standardPaymentMethods = ["", "Direct Deposit", "E-Transfer", "cheque", "cash"];
+  const hasCustomPaymentMethod = Boolean(paymentMethodValue) && !standardPaymentMethods.includes(paymentMethodValue);
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    const data: any = {
-      name: fd.get("name") as string,
-      workerType: fd.get("workerType") as string,
-      phone: fd.get("phone") as string || null,
-      email: fd.get("email") as string || null,
+    const paymentMethod = normalizeValue(fd.get("paymentMethod"));
+    const accountNumber = normalizeValue(fd.get("accountNumber"));
+    const name = (fd.get("name") as string).trim();
+    const workerType = (fd.get("workerType") as "payroll" | "subcontractor") ?? "payroll";
+
+    const commonData = {
+      name,
+      workerType,
+      phone: normalizeValue(fd.get("phone")),
+      email: normalizeValue(fd.get("email")),
       defaultRate: fd.get("defaultRate") ? Number(fd.get("defaultRate")) : null,
-      paymentMethod: fd.get("paymentMethod") as string || null,
-      interacEmail: fd.get("interacEmail") as string || null,
-      isActive: fd.get("isActive") === "true",
+      paymentMethod,
+      interacEmail: normalizeValue(fd.get("interacEmail")),
+      bankName: normalizeValue(fd.get("bankName")),
+      institutionNumber: normalizeValue(fd.get("institutionNumber")),
+      transitNumber: normalizeValue(fd.get("transitNumber")),
+      accountNumber,
+      bankAccount: accountNumber,
     };
 
     if (worker) {
+      const data: UpdateWorkerBody = {
+        ...commonData,
+        isActive: fd.get("isActive") === "true",
+      };
       update.mutate({ id: worker.id, data });
-    } else {
-      create.mutate({ data });
+      return;
     }
+
+    const data: CreateWorkerBody = commonData;
+    create.mutate({ data });
   };
 
   return (
@@ -210,15 +312,36 @@ function WorkerModal({ open, onClose, worker, onSuccess }: { open: boolean, onCl
           </div>
           <div className="space-y-2">
             <Label>Payment Method</Label>
-            <select name="paymentMethod" defaultValue={worker?.paymentMethod || "etransfer"} className="flex min-h-[48px] w-full rounded-xl border-2 border-border bg-background px-4 py-2 text-lg focus:border-primary focus:ring-4 outline-none">
-              <option value="etransfer">E-Transfer</option>
+            <select name="paymentMethod" defaultValue={paymentMethodValue} className="flex min-h-[48px] w-full rounded-xl border-2 border-border bg-background px-4 py-2 text-lg focus:border-primary focus:ring-4 outline-none">
+              <option value="">Not set</option>
+              <option value="Direct Deposit">Direct Deposit</option>
+              <option value="E-Transfer">E-Transfer</option>
               <option value="cheque">Cheque</option>
               <option value="cash">Cash</option>
+              {hasCustomPaymentMethod && (
+                <option value={paymentMethodValue}>{paymentMethodValue}</option>
+              )}
             </select>
           </div>
           <div className="space-y-2">
             <Label>Interac Email</Label>
             <Input name="interacEmail" defaultValue={worker?.interacEmail || ""} />
+          </div>
+          <div className="space-y-2">
+            <Label>Bank Name</Label>
+            <Input name="bankName" defaultValue={worker?.bankName || ""} />
+          </div>
+          <div className="space-y-2">
+            <Label>Institution #</Label>
+            <Input name="institutionNumber" defaultValue={worker?.institutionNumber || ""} />
+          </div>
+          <div className="space-y-2">
+            <Label>Transit #</Label>
+            <Input name="transitNumber" defaultValue={worker?.transitNumber || ""} />
+          </div>
+          <div className="space-y-2">
+            <Label>Account #</Label>
+            <Input name="accountNumber" defaultValue={worker?.accountNumber || worker?.bankAccount || ""} />
           </div>
           {worker && (
             <div className="space-y-2">
