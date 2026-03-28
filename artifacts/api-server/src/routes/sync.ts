@@ -192,6 +192,61 @@ function getRenderClient() {
   });
 }
 
+/**
+ * Helper to extract banking fields from a payment_profile JSON object.
+ * Tries multiple key variants to handle different API/schema naming conventions.
+ */
+function extractBankingFieldsFromProfile(profile: Record<string, any> | null | undefined): {
+  institutionNumber?: string | null;
+  transitNumber?: string | null;
+  accountNumber?: string | null;
+} {
+  if (!profile || typeof profile !== "object") {
+    return { institutionNumber: null, transitNumber: null, accountNumber: null };
+  }
+
+  const result = {
+    institutionNumber: null as string | null,
+    transitNumber: null as string | null,
+    accountNumber: null as string | null,
+  };
+
+  // Helper to get a value from the profile, trying multiple key variants
+  function getFirstMatch(keys: string[]): string | null {
+    for (const key of keys) {
+      const value = profile![key];
+      if (value && typeof value === "string" && value.trim()) {
+        return value.trim();
+      }
+    }
+    return null;
+  }
+
+  result.institutionNumber = getFirstMatch([
+    "institution_number",
+    "institution",
+    "bank_institution",
+    "institutionNumber",
+  ]);
+
+  result.transitNumber = getFirstMatch([
+    "transit_number",
+    "transit",
+    "bank_transit",
+    "branch_number",
+    "transitNumber",
+  ]);
+
+  result.accountNumber = getFirstMatch([
+    "account_number",
+    "accountNumber",
+    "bank_account",
+    "bankAccount",
+  ]);
+
+  return result;
+}
+
 async function syncWorkersFromRender(req: any, res: any): Promise<void> {
   const client = getRenderClient();
   try {
@@ -208,7 +263,8 @@ async function syncWorkersFromRender(req: any, res: any): Promise<void> {
 
     const usersRes = await client.query(`
       SELECT u.id::text, u.full_name, u.email, u.phone, u.worker_roles, u.is_active,
-             pp.etransfer_email, pp.payment_method, pp.bank_name, pp.bank_account
+             pp.etransfer_email, pp.payment_method, pp.bank_name, pp.bank_account,
+             to_jsonb(pp) AS payment_profile
       FROM users u
       LEFT JOIN payment_profiles pp ON pp.worker_user_id = u.id
       WHERE u.role = 'worker'
@@ -232,6 +288,9 @@ async function syncWorkersFromRender(req: any, res: any): Promise<void> {
       paymentMethod?: string | null;
       bankName?: string | null;
       bankAccount?: string | null;
+      institutionNumber?: string | null;
+      transitNumber?: string | null;
+      accountNumber?: string | null;
     }> = [];
 
     for (const row of applicantsRes.rows) {
@@ -247,6 +306,7 @@ async function syncWorkersFromRender(req: any, res: any): Promise<void> {
     }
 
     for (const row of usersRes.rows) {
+      const bankingFields = extractBankingFieldsFromProfile(row.payment_profile);
       const existing = allWorkers.find((w) => w.name === row.full_name);
       if (existing) {
         existing.email = row.email || null;
@@ -254,6 +314,9 @@ async function syncWorkersFromRender(req: any, res: any): Promise<void> {
         existing.paymentMethod = row.payment_method || null;
         existing.bankName = row.bank_name || null;
         existing.bankAccount = row.bank_account || null;
+        existing.institutionNumber = bankingFields.institutionNumber || null;
+        existing.transitNumber = bankingFields.transitNumber || null;
+        existing.accountNumber = bankingFields.accountNumber || null;
         existing.renderDbId = `user_${row.id}`;
       } else {
         allWorkers.push({
@@ -266,6 +329,9 @@ async function syncWorkersFromRender(req: any, res: any): Promise<void> {
           paymentMethod: row.payment_method || null,
           bankName: row.bank_name || null,
           bankAccount: row.bank_account || null,
+          institutionNumber: bankingFields.institutionNumber || null,
+          transitNumber: bankingFields.transitNumber || null,
+          accountNumber: bankingFields.accountNumber || null,
         });
       }
     }
@@ -291,6 +357,9 @@ async function syncWorkersFromRender(req: any, res: any): Promise<void> {
             paymentMethod: w.paymentMethod,
             bankName: w.bankName,
             bankAccount: w.bankAccount,
+            institutionNumber: w.institutionNumber,
+            transitNumber: w.transitNumber,
+            accountNumber: w.accountNumber,
           })
           .where(eq(workersTable.renderDbId, w.renderDbId));
         updated++;
