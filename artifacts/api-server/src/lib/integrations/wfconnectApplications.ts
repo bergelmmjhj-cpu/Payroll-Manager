@@ -730,3 +730,94 @@ export async function syncWfConnectApplications(): Promise<SyncResult> {
     skippedByReason,
   };
 }
+
+/**
+ * Diagnostic function: Fetches one sample application from WFConnect and returns
+ * detailed mapping information to help debug missing fields like institution_number/transit_number.
+ *
+ * Returns:
+ *   - Raw first approved application from WFConnect API
+ *   - All banking-related fields found by deepFindKeys
+ *   - Extracted payment fields after mapping
+ *   - Comparison showing what was found vs. what's expected
+ */
+export async function diagnosticWfConnectSample(): Promise<{
+  status: "ok" | "error";
+  message: string;
+  sample?: {
+    appId: string | number;
+    topLevelKeys: string[];
+    bankingFieldsFound: Array<{ path: string; value: unknown }>;
+    extracted: {
+      paymentMethod?: string;
+      bankName?: string;
+      institutionNumber?: string;
+      transitNumber?: string;
+      accountNumber?: string;
+      interacEmail?: string;
+    };
+    summary: {
+      institutionNumberFound: boolean;
+      transitNumberFound: boolean;
+      accountNumberFound: boolean;
+      bankNameFound: boolean;
+    };
+  };
+  error?: string;
+}> {
+  try {
+    const { key: apiKey, source: keySource } = resolveApiKeySource();
+    const rawApiBase = process.env.WFCONNECT_API_BASE_URL;
+    const apiBase = normalizeWfConnectBaseUrl(rawApiBase);
+
+    if (!apiKey) {
+      return {
+        status: "error",
+        message: "No API key configured (PAYROLL_API_KEY or WFCONNECT_API_KEY)",
+        error: "Missing credentials",
+      };
+    }
+
+    const { applications } = await fetchAndParseApplications(apiBase, apiKey);
+
+    // Find first approved application
+    const approved = applications.find(
+      (app) => isApprovedStatus(app.status) && app.id && resolveName(app)
+    );
+
+    if (!approved) {
+      return {
+        status: "ok",
+        message: `No approved applications found (fetched ${applications.length} total)`,
+      };
+    }
+
+    const topLevelKeys = Object.keys(approved as Record<string, unknown>);
+    const bankingFieldsFound = deepFindKeys(approved, BANKING_KEY_PATTERNS);
+    const extracted = extractPaymentFields(approved);
+
+    return {
+      status: "ok",
+      message: "Sample application diagnostic data retrieved successfully",
+      sample: {
+        appId: approved.id,
+        topLevelKeys,
+        bankingFieldsFound,
+        extracted,
+        summary: {
+          institutionNumberFound: !!extracted.institutionNumber,
+          transitNumberFound: !!extracted.transitNumber,
+          accountNumberFound: !!extracted.accountNumber,
+          bankNameFound: !!extracted.bankName,
+        },
+      },
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return {
+      status: "error",
+      message: "Failed to fetch diagnostic data",
+      error: message,
+    };
+  }
+}

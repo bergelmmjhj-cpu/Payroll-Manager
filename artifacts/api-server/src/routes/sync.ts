@@ -6,6 +6,7 @@ import { detectRegion } from "../lib/regions";
 import { syncCrmWorkplaces } from "../lib/integrations/crmWorkplaces";
 import {
   syncWfConnectApplications,
+  diagnosticWfConnectSample,
   WfConnectRequestError,
 } from "../lib/integrations/wfconnectApplications";
 
@@ -38,6 +39,23 @@ router.get("/sync/status", async (req, res): Promise<void> => {
   } catch (err) {
     req.log.error({ err }, "Failed to get sync status");
     res.status(500).json({ error: "Failed to get sync status" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/sync/diagnostic — debug why institution/transit numbers not syncing
+// ---------------------------------------------------------------------------
+router.get("/sync/diagnostic", async (req, res): Promise<void> => {
+  try {
+    const result = await diagnosticWfConnectSample();
+    res.json(result);
+  } catch (err) {
+    req.log.error({ err }, "Failed to get diagnostic data");
+    res.status(500).json({
+      status: "error",
+      message: "Failed to run diagnostic",
+      error: String(err),
+    });
   }
 });
 
