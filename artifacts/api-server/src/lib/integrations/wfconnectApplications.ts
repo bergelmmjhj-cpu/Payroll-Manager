@@ -2,6 +2,38 @@ import { db, workersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { logger } from "../logger";
 
+const DEFAULT_WFCONNECT_BASE_URL = "https://guide.wfconnect.org";
+const APPLICATIONS_PATH = "/api/admin/applications";
+const REQUEST_TIMEOUT_MS = 20_000;
+const MAX_ATTEMPTS = 4;
+const BASE_BACKOFF_MS = 500;
+
+type WfConnectFailureCode =
+  | "invalid_or_revoked_key"
+  | "missing_scope"
+  | "timeout"
+  | "upstream_5xx"
+  | "upstream_error"
+  | "invalid_response";
+
+export class WfConnectRequestError extends Error {
+  readonly code: WfConnectFailureCode;
+  readonly status?: number;
+  readonly retryable: boolean;
+
+  constructor(
+    code: WfConnectFailureCode,
+    message: string,
+    options?: { status?: number; retryable?: boolean }
+  ) {
+    super(message);
+    this.name = "WfConnectRequestError";
+    this.code = code;
+    this.status = options?.status;
+    this.retryable = options?.retryable ?? false;
+  }
+}
+
 export interface SyncResult {
   fetched: number;
   inserted: number;
@@ -45,6 +77,13 @@ type WfApiResponse =
   | { results: WfApplication[] }
   | { applications: WfApplication[] };
 
+interface WfConnectHealthResult {
+  ok: boolean;
+  endpoint: string;
+  keyPrefix: string;
+  rowCount: number;
+}
+
 function sanitizeApiKey(rawApiKey?: string): string {
   const value = (rawApiKey ?? "").trim();
   if (!value) return "";
@@ -56,8 +95,26 @@ function sanitizeApiKey(rawApiKey?: string): string {
   return withoutQuotes.trim();
 }
 
+function resolveApiKeySource(): { key: string; source: "PAYROLL_API_KEY" | "WFCONNECT_API_KEY" | null } {
+  const payrollKey = sanitizeApiKey(process.env.PAYROLL_API_KEY);
+  if (payrollKey) {
+    return { key: payrollKey, source: "PAYROLL_API_KEY" };
+  }
+
+  const wfConnectKey = sanitizeApiKey(process.env.WFCONNECT_API_KEY);
+  if (wfConnectKey) {
+    return { key: wfConnectKey, source: "WFCONNECT_API_KEY" };
+  }
+
+  return { key: "", source: null };
+}
+
+function keyPrefix(apiKey: string): string {
+  return apiKey.slice(0, 12);
+}
+
 function normalizeWfConnectBaseUrl(rawBase?: string): string {
-  const fallback = "https://guide.wfconnect.org";
+  const fallback = DEFAULT_WFCONNECT_BASE_URL;
   const trimmed = (rawBase ?? fallback).trim();
   const withoutTrailingSlash = trimmed.replace(/\/+$/, "");
 
@@ -88,30 +145,209 @@ function isApprovedStatus(status?: string): boolean {
   return (status ?? "").trim().toLowerCase() === "approved";
 }
 
+function computeBackoffDelayMs(attempt: number): number {
+  const exponential = BASE_BACKOFF_MS * 2 ** (attempt - 1);
+  const jitter = Math.floor(Math.random() * 300);
+  return exponential + jitter;
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchApplications(apiBase: string, apiKey: string): Promise<Response> {
+  const endpoint = `${apiBase}${APPLICATIONS_PATH}`;
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+    try {
+      logger.info({ endpoint, attempt, maxAttempts: MAX_ATTEMPTS }, "Fetching applications from WF Connect");
+      const response = await fetch(endpoint, {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          "User-Agent": "Payroll-Manager/worker-sync",
+        },
+        signal: controller.signal,
+      });
+
+      if (response.status === 401) {
+        throw new WfConnectRequestError(
+          "invalid_or_revoked_key",
+          "WF Connect key is invalid or revoked (401). Replace PAYROLL_API_KEY/WFCONNECT_API_KEY.",
+          { status: 401, retryable: false }
+        );
+      }
+
+      if (response.status === 403) {
+        throw new WfConnectRequestError(
+          "missing_scope",
+          "WF Connect key is missing required scope applications:read (403).",
+          { status: 403, retryable: false }
+        );
+      }
+
+      if (response.status >= 500) {
+        const body = await response.text();
+        if (attempt < MAX_ATTEMPTS) {
+          const delayMs = computeBackoffDelayMs(attempt);
+          logger.warn(
+            { endpoint, status: response.status, attempt, delayMs },
+            "WF Connect upstream 5xx, retrying with backoff"
+          );
+          await sleep(delayMs);
+          continue;
+        }
+
+        throw new WfConnectRequestError(
+          "upstream_5xx",
+          `WF Connect API responded ${response.status}: ${body.slice(0, 300)}`,
+          { status: response.status, retryable: true }
+        );
+      }
+
+      if (!response.ok) {
+        const body = await response.text();
+        throw new WfConnectRequestError(
+          "upstream_error",
+          `WF Connect API responded ${response.status}: ${body.slice(0, 300)}`,
+          { status: response.status, retryable: false }
+        );
+      }
+
+      return response;
+    } catch (err) {
+      if (err instanceof WfConnectRequestError) {
+        throw err;
+      }
+
+      const isTimeout = err instanceof Error && err.name === "AbortError";
+      if (isTimeout && attempt < MAX_ATTEMPTS) {
+        const delayMs = computeBackoffDelayMs(attempt);
+        logger.warn(
+          { endpoint, attempt, delayMs, timeoutMs: REQUEST_TIMEOUT_MS },
+          "WF Connect request timed out, retrying"
+        );
+        await sleep(delayMs);
+        continue;
+      }
+
+      if (isTimeout) {
+        throw new WfConnectRequestError(
+          "timeout",
+          `WF Connect request timed out after ${REQUEST_TIMEOUT_MS}ms.`,
+          { retryable: true }
+        );
+      }
+
+      const message = err instanceof Error ? err.message : String(err);
+      throw new WfConnectRequestError(
+        "upstream_error",
+        `WF Connect request failed: ${message}`,
+        { retryable: false }
+      );
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  throw new WfConnectRequestError(
+    "upstream_error",
+    "WF Connect request failed without response.",
+    { retryable: false }
+  );
+}
+
+async function fetchAndParseApplications(
+  apiBase: string,
+  apiKey: string
+): Promise<{ endpoint: string; applications: WfApplication[] }> {
+  const endpoint = `${apiBase}${APPLICATIONS_PATH}`;
+  const response = await fetchApplications(apiBase, apiKey);
+  const bodyText = await response.text();
+
+  if (!bodyText.trim()) {
+    throw new WfConnectRequestError(
+      "invalid_response",
+      "WF Connect API returned an empty response body.",
+      { retryable: false }
+    );
+  }
+
+  let raw: WfApiResponse;
+  try {
+    raw = JSON.parse(bodyText) as WfApiResponse;
+  } catch (err) {
+    const preview = bodyText.slice(0, 200);
+    if (bodyText.trimStart().startsWith("<")) {
+      throw new WfConnectRequestError(
+        "invalid_response",
+        "WF Connect API returned HTML instead of JSON. Check WFCONNECT_API_BASE_URL.",
+        { retryable: false }
+      );
+    }
+
+    const parseMessage = err instanceof Error ? err.message : "Unknown JSON parse error";
+    throw new WfConnectRequestError(
+      "invalid_response",
+      `Failed to parse WF Connect API JSON response: ${parseMessage}. Response preview: ${preview}`,
+      { retryable: false }
+    );
+  }
+
+  return {
+    endpoint,
+    applications: extractApplications(raw),
+  };
+}
+
+export async function checkWfConnectHealth(): Promise<WfConnectHealthResult> {
+  const { key: apiKey, source } = resolveApiKeySource();
+  const rawApiBase = process.env.WFCONNECT_API_BASE_URL;
+  const apiBase = normalizeWfConnectBaseUrl(rawApiBase);
+
+  if (!apiKey || !source) {
+    throw new WfConnectRequestError(
+      "invalid_or_revoked_key",
+      "Missing API key. Set PAYROLL_API_KEY or WFCONNECT_API_KEY.",
+      { retryable: false }
+    );
+  }
+
+  const prefix = keyPrefix(apiKey);
+  logger.info({ keySource: source, keyPrefix: prefix, apiBase }, "Running WF Connect health check");
+
+  const { endpoint, applications } = await fetchAndParseApplications(apiBase, apiKey);
+
+  return {
+    ok: true,
+    endpoint,
+    keyPrefix: prefix,
+    rowCount: applications.length,
+  };
+}
+
 /**
  * Fetches applications from WF Connect and upserts them into the local
  * workers table, keyed by `wfconnect_<id>` in the renderDbId column.
  *
- * Required env: WFCONNECT_API_KEY
+ * Required env: PAYROLL_API_KEY (preferred) or WFCONNECT_API_KEY (fallback)
  * Optional env: WFCONNECT_API_BASE_URL (default: https://guide.wfconnect.org)
  */
 export async function syncWfConnectApplications(): Promise<SyncResult> {
-  const rawApiKey = process.env.WFCONNECT_API_KEY;
-  const apiKey = sanitizeApiKey(rawApiKey);
+  const { key: apiKey, source: keySource } = resolveApiKeySource();
   const rawApiBase = process.env.WFCONNECT_API_BASE_URL;
   const apiBase = normalizeWfConnectBaseUrl(rawApiBase);
+  const prefix = keyPrefix(apiKey);
 
   if (!apiKey) {
-    throw new Error("WFCONNECT_API_KEY is not set");
-  }
-
-  if (rawApiKey && rawApiKey !== apiKey) {
-    logger.warn(
-      {
-        rawLength: rawApiKey.length,
-        sanitizedLength: apiKey.length,
-      },
-      "Sanitizing WFCONNECT_API_KEY before request"
+    throw new WfConnectRequestError(
+      "invalid_or_revoked_key",
+      "Missing API key. Set PAYROLL_API_KEY or WFCONNECT_API_KEY.",
+      { retryable: false }
     );
   }
 
@@ -125,85 +361,14 @@ export async function syncWfConnectApplications(): Promise<SyncResult> {
     );
   }
 
-  const candidateUrls = [
-    `${apiBase}/api/admin/applications`,
-    `${apiBase}/admin/applications`,
-  ];
-  let response: Response | undefined;
-  let url = candidateUrls[0];
+  logger.info(
+    { keySource: keySource ?? "unknown", keyPrefix: prefix, apiBase },
+    "Starting WF Connect worker sync"
+  );
 
-  for (const candidateUrl of candidateUrls) {
-    logger.info({ url: candidateUrl }, "Fetching applications from WF Connect");
-    const candidateResponse = await fetch(candidateUrl, {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        "User-Agent": "Payroll-Manager/worker-sync",
-      },
-    });
+  const { applications } = await fetchAndParseApplications(apiBase, apiKey);
 
-    // Prefer an endpoint that does not return HTML for successful responses.
-    if (!candidateResponse.ok) {
-      response = candidateResponse;
-      url = candidateUrl;
-      break;
-    }
-
-    const contentType = candidateResponse.headers.get("content-type") ?? "";
-    if (!contentType.toLowerCase().includes("text/html")) {
-      response = candidateResponse;
-      url = candidateUrl;
-      break;
-    }
-
-    response = candidateResponse;
-    url = candidateUrl;
-  }
-
-  if (!response) {
-    throw new Error("WF Connect API request did not produce a response");
-  }
-
-  if (!response.ok) {
-    const body = await response.text();
-
-    if (response.status === 401) {
-      throw new Error(
-        `WF Connect authentication failed (401) from ${url}. Verify WFCONNECT_API_KEY is the raw token value (no Bearer prefix, no quotes/newlines) and has applications-read permissions.`
-      );
-    }
-
-    throw new Error(
-      `WF Connect API responded ${response.status} from ${url}: ${body.slice(0, 300)}`
-    );
-  }
-
-  const bodyText = await response.text();
-  if (!bodyText.trim()) {
-    throw new Error("WF Connect API returned an empty response body");
-  }
-
-  let raw: WfApiResponse;
-  try {
-    raw = JSON.parse(bodyText) as WfApiResponse;
-  } catch (err) {
-    const preview = bodyText.slice(0, 200);
-    if (bodyText.trimStart().startsWith("<")) {
-      throw new Error(
-        "WF Connect API returned HTML instead of JSON. Check WFCONNECT_API_BASE_URL and API path configuration."
-      );
-    }
-
-    const parseMessage =
-      err instanceof Error ? err.message : "Unknown JSON parse error";
-    throw new Error(
-      `Failed to parse WF Connect API JSON response: ${parseMessage}. Response preview: ${preview}`
-    );
-  }
-  const applications = extractApplications(raw);
-
-  logger.info({ count: applications.length }, "Fetched WF Connect applications");
+  logger.info({ count: applications.length, keyPrefix: prefix }, "Fetched WF Connect applications");
 
   let inserted = 0;
   let updated = 0;

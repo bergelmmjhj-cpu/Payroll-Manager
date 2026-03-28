@@ -37,7 +37,8 @@ Workers and Hotels/Sites are populated by syncing from external APIs. Set these 
 | Variable | Purpose |
 |---|---|
 | `WEEKDAYS_API_KEY` | Weekdays CRM — syncs workplaces → Hotels/Sites |
-| `WFCONNECT_API_KEY` | WF Connect — syncs applications → Workers |
+| `PAYROLL_API_KEY` | WF Connect Payroll key (preferred) — syncs applications → Workers |
+| `WFCONNECT_API_KEY` | WF Connect key fallback (used only if `PAYROLL_API_KEY` is missing) |
 | `WEEKDAYS_API_BASE_URL` | Override the CRM base URL (optional) |
 | `WFCONNECT_API_BASE_URL` | Override the WF Connect base URL (optional) |
 
@@ -49,11 +50,12 @@ Trigger a sync manually (requires a logged-in session or an internal call):
 POST /api/sync/hotels    # pulls workplaces from Weekdays CRM
 POST /api/sync/workers   # pulls applications from WF Connect
 GET  /api/sync/status    # returns current counts of workers and hotels
+GET  /api/health/wfconnect  # validates WF Connect auth and returns application row count
 ```
 
 Legacy Render DB sync is also available through `RENDER_DATABASE_URL`.
 
-- Workers automatically fall back to Render when `WFCONNECT_API_KEY` is missing.
+- Workers automatically fall back to Render when both `PAYROLL_API_KEY` and `WFCONNECT_API_KEY` are missing.
 - Hotels automatically fall back to Render when `WEEKDAYS_API_KEY` is missing.
 - You can still force the legacy source explicitly with these endpoints:
 
@@ -63,6 +65,31 @@ POST /api/sync/workers?source=render
 ```
 
 This requires `RENDER_DATABASE_URL` to be set.
+
+## Payroll integration runbook
+
+Use this runtime contract for Workforce Connect Payroll:
+
+- Base URL: `https://guide.wfconnect.org` (or `WFCONNECT_API_BASE_URL` override)
+- Endpoint: `GET /api/admin/applications`
+- Auth header: `Authorization: Bearer ${PAYROLL_API_KEY}`
+- Required key scope: `applications:read`
+- Key format expectation: plaintext key beginning with `wfc_`
+
+Failure actions:
+
+- `401`: key invalid or revoked. Replace key in Railway variables, redeploy, then re-run `GET /api/health/wfconnect`.
+- `403`: key missing `applications:read` scope. Grant scope, then re-run `GET /api/health/wfconnect`.
+- `5xx` or timeout: integration retries with exponential backoff + jitter; if still failing, treat as upstream outage and retry later.
+
+Key rotation:
+
+1. Update `PAYROLL_API_KEY` in Railway (or `WFCONNECT_API_KEY` if still using fallback).
+2. Deploy.
+3. Verify with `GET /api/health/wfconnect`.
+4. Revoke old key after health check succeeds.
+
+Polling cadence recommendation: run `POST /api/sync/workers` from an external scheduler every 5 to 15 minutes.
 
 ## First deploy checklist
 

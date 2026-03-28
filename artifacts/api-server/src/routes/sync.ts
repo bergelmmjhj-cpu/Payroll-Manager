@@ -4,7 +4,10 @@ import { db, workersTable, hotelsTable } from "@workspace/db";
 import { eq, count } from "drizzle-orm";
 import { detectRegion } from "../lib/regions";
 import { syncCrmWorkplaces } from "../lib/integrations/crmWorkplaces";
-import { syncWfConnectApplications } from "../lib/integrations/wfconnectApplications";
+import {
+  syncWfConnectApplications,
+  WfConnectRequestError,
+} from "../lib/integrations/wfconnectApplications";
 
 const router: IRouter = Router();
 
@@ -40,27 +43,29 @@ router.get("/sync/status", async (req, res): Promise<void> => {
 
 // ---------------------------------------------------------------------------
 // POST /api/sync/workers
-//   Default source: WF Connect (WFCONNECT_API_KEY)
-//   Fallback source: Render DB when WFCONNECT_API_KEY is missing
+//   Default source: WF Connect (PAYROLL_API_KEY or WFCONNECT_API_KEY)
+//   Fallback source: Render DB when both keys are missing
 //   Force legacy source: ?source=render (RENDER_DATABASE_URL)
 // ---------------------------------------------------------------------------
 router.post("/sync/workers", async (req, res): Promise<void> => {
   const forceRender = req.query.source === "render";
-  const hasWfConnectKey = Boolean(process.env.WFCONNECT_API_KEY);
+  const hasWfConnectKey = Boolean(
+    process.env.PAYROLL_API_KEY || process.env.WFCONNECT_API_KEY
+  );
   const hasRenderSource = Boolean(process.env.RENDER_DATABASE_URL);
 
   if (forceRender || !hasWfConnectKey) {
     if (!hasRenderSource) {
       res.status(400).json({
         error:
-          "No worker sync source configured. Set WFCONNECT_API_KEY or RENDER_DATABASE_URL.",
+          "No worker sync source configured. Set PAYROLL_API_KEY (or WFCONNECT_API_KEY) or RENDER_DATABASE_URL.",
       });
       return;
     }
 
     if (!forceRender && !hasWfConnectKey) {
       req.log.warn(
-        "WFCONNECT_API_KEY not set; using legacy Render worker sync fallback"
+        "PAYROLL_API_KEY/WFCONNECT_API_KEY not set; using legacy Render worker sync fallback"
       );
     }
 
@@ -78,10 +83,39 @@ router.post("/sync/workers", async (req, res): Promise<void> => {
       message: `Processed ${result.fetched} WF Connect applications (approved imports only): ${result.inserted} new, ${result.updated} updated, ${result.skipped} skipped, ${result.errors} errors${skippedReasonMessage}`,
     });
   } catch (err) {
+    if (err instanceof WfConnectRequestError) {
+      if (err.code === "invalid_or_revoked_key") {
+        req.log.error({ err }, "WF Connect key invalid or revoked");
+        res.status(401).json({
+          error: err.message,
+          action: "Replace PAYROLL_API_KEY/WFCONNECT_API_KEY with an active key.",
+        });
+        return;
+      }
+
+      if (err.code === "missing_scope") {
+        req.log.error({ err }, "WF Connect key missing required scope");
+        res.status(403).json({
+          error: err.message,
+          action: "Grant applications:read scope to the active key.",
+        });
+        return;
+      }
+
+      if (err.code === "timeout" || err.code === "upstream_5xx") {
+        req.log.error({ err }, "WF Connect transient upstream failure");
+        res.status(502).json({
+          error: err.message,
+          action: "Retry later. If persistent, check WF Connect uptime.",
+        });
+        return;
+      }
+    }
+
     req.log.error({ err }, "WF Connect worker sync failed");
-    res
-      .status(500)
-      .json({ error: err instanceof Error ? err.message : String(err) });
+    res.status(500).json({
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 });
 
