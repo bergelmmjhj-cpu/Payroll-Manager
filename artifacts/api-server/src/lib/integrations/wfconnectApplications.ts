@@ -198,6 +198,42 @@ function pickFirstString(obj: unknown, paths: string[]): string | undefined {
   return undefined;
 }
 
+/**
+ * Recursively walks `obj` and collects every { path, value } entry whose
+ * key matches any of the provided regex patterns. Useful for diagnosing
+ * unknown API shapes without having to guess field names.
+ */
+function deepFindKeys(
+  obj: unknown,
+  patterns: RegExp[],
+  _prefix = ""
+): Array<{ path: string; value: unknown }> {
+  if (!obj || typeof obj !== "object") return [];
+  const results: Array<{ path: string; value: unknown }> = [];
+  for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+    const path = _prefix ? `${_prefix}.${key}` : key;
+    if (patterns.some((p) => p.test(key))) {
+      results.push({ path, value });
+    }
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      results.push(...deepFindKeys(value, patterns, path));
+    }
+  }
+  return results;
+}
+
+const BANKING_KEY_PATTERNS = [
+  /institution/i,
+  /transit/i,
+  /branch/i,
+  /routing/i,
+  /bank/i,
+  /account/i,
+  /payment/i,
+  /etransfer/i,
+  /interac/i,
+];
+
 function normalizePaymentMethod(value: string | undefined): string | undefined {
   if (!value) return undefined;
 
@@ -572,9 +608,17 @@ export async function syncWfConnectApplications(): Promise<SyncResult> {
     try {
       const renderDbId = `wfconnect_${app.id}`;
 
+      const topLevelKeys = Object.keys(app as Record<string, unknown>);
+      const bankingFields = deepFindKeys(app, BANKING_KEY_PATTERNS);
+
       logger.info(
-        { appId: app.id, rawPayload: app },
-        "[RAW_PAYLOAD] WF Connect application"
+        {
+          appId: app.id,
+          topLevelKeys,
+          bankingFields,
+          rawPayload: app,
+        },
+        "[RAW_PAYLOAD] WF Connect application — check topLevelKeys and bankingFields to identify institution/transit field names"
       );
 
       const payment = extractPaymentFields(app);
