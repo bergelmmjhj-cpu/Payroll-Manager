@@ -72,7 +72,11 @@ interface WfApplication {
   payment_method?: string;
   bank_name?: string;
   institution_number?: string | number;
+  institution?: string | number;
+  bank_institution?: string | number;
   transit_number?: string | number;
+  transit?: string | number;
+  branch_number?: string | number;
   account_number?: string | number;
   etransfer_email?: string;
 
@@ -82,6 +86,12 @@ interface WfApplication {
   transitNumber?: string | number;
   accountNumber?: string | number;
   etransferEmail?: string;
+
+  // allow arbitrary nested payment info objects from the API
+  payment_information?: Record<string, unknown>;
+  paymentInfo?: Record<string, unknown>;
+  paymentProfile?: Record<string, unknown>;
+  [key: string]: unknown;
 }
 
 type WfApiResponse =
@@ -235,20 +245,36 @@ function extractPaymentFields(app: WfApplication): ParsedPaymentFields {
 
   const institutionNumber = pickFirstString(app, [
     "institution_number",
+    "institution",
+    "bank_institution",
     "institutionNumber",
     "payment_information.institution_number",
+    "payment_information.institution",
+    "payment_information.bank_institution",
     "payment_information.institutionNumber",
     "paymentInfo.institutionNumber",
+    "paymentInfo.institution_number",
+    "paymentInfo.institution",
     "paymentProfile.institutionNumber",
+    "paymentProfile.institution_number",
+    "paymentProfile.institution",
   ]);
 
   const transitNumber = pickFirstString(app, [
     "transit_number",
+    "transit",
+    "branch_number",
     "transitNumber",
     "payment_information.transit_number",
+    "payment_information.transit",
+    "payment_information.branch_number",
     "payment_information.transitNumber",
     "paymentInfo.transitNumber",
+    "paymentInfo.transit_number",
+    "paymentInfo.transit",
     "paymentProfile.transitNumber",
+    "paymentProfile.transit_number",
+    "paymentProfile.transit",
   ]);
 
   const accountNumber = pickFirstString(app, [
@@ -546,7 +572,25 @@ export async function syncWfConnectApplications(): Promise<SyncResult> {
     try {
       const renderDbId = `wfconnect_${app.id}`;
 
+      logger.info(
+        { appId: app.id, rawPayload: app },
+        "[RAW_PAYLOAD] WF Connect application"
+      );
+
       const payment = extractPaymentFields(app);
+
+      logger.info(
+        {
+          appId: app.id,
+          paymentMethod: payment.paymentMethod,
+          bankName: payment.bankName,
+          institutionNumber: payment.institutionNumber,
+          transitNumber: payment.transitNumber,
+          accountNumber: payment.accountNumber,
+          interacEmail: payment.interacEmail,
+        },
+        "[EXTRACTED_PAYMENT] Mapped payment fields for WF Connect application"
+      );
 
       const baseRecord = {
         name,
@@ -583,9 +627,21 @@ export async function syncWfConnectApplications(): Promise<SyncResult> {
           .update(workersTable)
           .set({ ...baseRecord, ...paymentRecord })
           .where(eq(workersTable.renderDbId, renderDbId));
+        logger.info(
+          {
+            appId: app.id,
+            renderDbId,
+            institutionNumber: paymentRecord.institutionNumber,
+            transitNumber: paymentRecord.transitNumber,
+            bankName: paymentRecord.bankName,
+            accountNumber: paymentRecord.accountNumber,
+            interacEmail: paymentRecord.interacEmail,
+          },
+          "[DB_SAVED] Updated existing worker payment fields"
+        );
         updated++;
       } else {
-        await db.insert(workersTable).values({
+        const insertRecord = {
           renderDbId,
           ...baseRecord,
           paymentMethod: payment.paymentMethod ?? null,
@@ -595,7 +651,20 @@ export async function syncWfConnectApplications(): Promise<SyncResult> {
           accountNumber: payment.accountNumber ?? null,
           bankAccount: payment.bankAccount ?? null,
           interacEmail: payment.interacEmail ?? null,
-        });
+        };
+        await db.insert(workersTable).values(insertRecord);
+        logger.info(
+          {
+            appId: app.id,
+            renderDbId,
+            institutionNumber: insertRecord.institutionNumber,
+            transitNumber: insertRecord.transitNumber,
+            bankName: insertRecord.bankName,
+            accountNumber: insertRecord.accountNumber,
+            interacEmail: insertRecord.interacEmail,
+          },
+          "[DB_SAVED] Inserted new worker payment fields"
+        );
         inserted++;
       }
     } catch (err) {
