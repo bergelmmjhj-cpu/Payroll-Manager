@@ -8,6 +8,7 @@
 
 export * from "./analyzeImportBody";
 export * from "./authUser";
+export * from "./bulkSaveHotelEntriesBody";
 export * from "./bulkUpsertResult";
 export * from "./bulkUpsertTimeEntriesBody";
 export * from "./businessProfile";
@@ -31,6 +32,10 @@ export * from "./exportResult";
 export * from "./generateInvoiceFromPeriodBody";
 export * from "./healthStatus";
 export * from "./hotel";
+export * from "./hotelPosition";
+export * from "./hotelSectionEntryInput";
+export * from "./hotelSectionEntryInputEntryType";
+export * from "./hotelSectionSaveResult";
 export * from "./hotelTally";
 export * from "./importAnalysis";
 export * from "./importResult";
@@ -79,5 +84,6 @@ export * from "./updateWorkerBody";
 export * from "./updateWorkerBodyWorkerType";
 export * from "./uploadLogoBody";
 export * from "./worker";
+export * from "./workerHotelRate";
 export * from "./workerTally";
 export * from "./workerWorkerType";

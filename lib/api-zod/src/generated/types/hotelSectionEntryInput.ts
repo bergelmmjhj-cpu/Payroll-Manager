@@ -5,17 +5,16 @@
  * MMJ Payroll System API
  * OpenAPI spec version: 0.1.0
  */
-import type { CreateTimeEntryBodyEntryType } from "./createTimeEntryBodyEntryType";
+import type { HotelSectionEntryInputEntryType } from "./hotelSectionEntryInputEntryType";
 
-export interface CreateTimeEntryBody {
-  workerId: number;
+export interface HotelSectionEntryInput {
   /** @nullable */
-  payPeriodHotelId?: number | null;
+  id?: number | null;
   /** @nullable */
-  hotelId?: number | null;
+  workerId?: number | null;
   /** @nullable */
   role?: string | null;
-  entryType: CreateTimeEntryBodyEntryType;
+  entryType?: HotelSectionEntryInputEntryType;
   /** @nullable */
   workDate?: string | null;
   /** @nullable */
@@ -32,13 +31,12 @@ export interface CreateTimeEntryBody {
   ratePerHour?: number | null;
   /** @nullable */
   flatAmount?: number | null;
-  totalAmount: number;
+  /** @nullable */
+  totalAmount?: number | null;
   /** @nullable */
   paymentMethod?: string | null;
   /** @nullable */
   interacEmail?: string | null;
   /** @nullable */
   notes?: string | null;
-  /** @nullable */
-  region?: string | null;
 }

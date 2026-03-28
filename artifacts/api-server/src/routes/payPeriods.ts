@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, payPeriodsTable, payPeriodHotelsTable, timeEntriesTable, paymentsTable, workersTable, hotelsTable } from "@workspace/db";
+import { db, payPeriodsTable, payPeriodHotelsTable, timeEntriesTable, paymentsTable, workersTable, hotelsTable, workerHotelRatesTable } from "@workspace/db";
 import { eq, and, asc, desc } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
@@ -53,6 +53,162 @@ function mapPayment(p: typeof paymentsTable.$inferSelect) {
     amount: Number(p.amount),
     paidAt: p.paidAt ? p.paidAt.toISOString() : null,
   };
+}
+
+type HotelPosition = {
+  title?: string | null;
+  rate?: string | number | null;
+};
+
+function toNumberOrNull(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeRole(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  return normalized || null;
+}
+
+function readHotelPositions(value: unknown): HotelPosition[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is HotelPosition => Boolean(item && typeof item === "object"));
+}
+
+function resolveHotelFallbackRate(
+  hotel: Pick<typeof hotelsTable.$inferSelect, "payRate" | "positions"> | null | undefined,
+  role: unknown,
+): number | null {
+  if (!hotel) return null;
+
+  const normalizedRole = normalizeRole(role);
+  const positions = readHotelPositions(hotel.positions);
+
+  if (normalizedRole) {
+    const exactPosition = positions.find((position) => normalizeRole(position.title) === normalizedRole);
+    const exactRate = toNumberOrNull(exactPosition?.rate);
+    if (exactRate != null) return exactRate;
+  }
+
+  const firstPositionRate = toNumberOrNull(positions[0]?.rate);
+  if (firstPositionRate != null) return firstPositionRate;
+
+  return toNumberOrNull(hotel.payRate);
+}
+
+async function resolveRatePerHour({
+  workerId,
+  hotelId,
+  role,
+  explicitRate,
+  worker,
+  hotel,
+}: {
+  workerId: number;
+  hotelId: number | null;
+  role?: unknown;
+  explicitRate?: unknown;
+  worker?: typeof workersTable.$inferSelect | null;
+  hotel?: typeof hotelsTable.$inferSelect | null;
+}): Promise<number | null> {
+  const explicit = toNumberOrNull(explicitRate);
+  if (explicit != null) return explicit;
+
+  if (hotelId != null) {
+    const overrides = await db
+      .select()
+      .from(workerHotelRatesTable)
+      .where(and(eq(workerHotelRatesTable.workerId, workerId), eq(workerHotelRatesTable.hotelId, hotelId)));
+
+    const normalizedRole = normalizeRole(role);
+    const exact = overrides.find((item) => normalizeRole(item.role) === normalizedRole);
+    const generic = overrides.find((item) => normalizeRole(item.role) == null);
+    const overrideRate = toNumberOrNull((exact ?? generic)?.rate);
+    if (overrideRate != null) return overrideRate;
+  }
+
+  const resolvedWorker = worker ?? (await db.select().from(workersTable).where(eq(workersTable.id, workerId)).limit(1))[0] ?? null;
+  const workerRate = toNumberOrNull(resolvedWorker?.defaultRate);
+  if (workerRate != null) return workerRate;
+
+  const resolvedHotel = hotelId == null
+    ? null
+    : hotel ?? (await db.select().from(hotelsTable).where(eq(hotelsTable.id, hotelId)).limit(1))[0] ?? null;
+
+  return resolveHotelFallbackRate(resolvedHotel, role);
+}
+
+async function rememberWorkerHotelRate({
+  workerId,
+  hotelId,
+  role,
+  rate,
+}: {
+  workerId: number;
+  hotelId: number | null;
+  role?: unknown;
+  rate: number | null;
+}): Promise<void> {
+  if (hotelId == null || rate == null) return;
+
+  const normalizedRole = normalizeRole(role);
+  const existingRates = await db
+    .select()
+    .from(workerHotelRatesTable)
+    .where(and(eq(workerHotelRatesTable.workerId, workerId), eq(workerHotelRatesTable.hotelId, hotelId)));
+
+  const existing = existingRates.find((item) => normalizeRole(item.role) === normalizedRole);
+
+  if (existing) {
+    await db
+      .update(workerHotelRatesTable)
+      .set({ rate: String(rate), role: normalizedRole ?? null })
+      .where(eq(workerHotelRatesTable.id, existing.id));
+    return;
+  }
+
+  await db.insert(workerHotelRatesTable).values({
+    workerId,
+    hotelId,
+    role: normalizedRole ?? null,
+    rate: String(rate),
+  });
+}
+
+function hasRowContent(entry: Record<string, unknown>): boolean {
+  return [
+    entry.workerId,
+    entry.role,
+    entry.workDate,
+    entry.regularHours,
+    entry.overtimeHours,
+    entry.otherHours,
+    entry.totalHours,
+    entry.hoursWorked,
+    entry.ratePerHour,
+    entry.flatAmount,
+    entry.notes,
+  ].some((value) => value !== null && value !== undefined && `${value}`.trim() !== "");
+}
+
+function ensureNonNegativeNumber(name: string, value: unknown): string | null {
+  const parsed = toNumberOrNull(value);
+  if (parsed == null) return null;
+  if (parsed < 0) return `${name} cannot be negative`;
+  return null;
+}
+
+function resolveHoursPayload(entry: Record<string, unknown>): number | null {
+  const explicit = toNumberOrNull(entry.totalHours ?? entry.hoursWorked);
+  if (explicit != null) return explicit;
+
+  const regularHours = toNumberOrNull(entry.regularHours) ?? 0;
+  const overtimeHours = toNumberOrNull(entry.overtimeHours) ?? 0;
+  const otherHours = toNumberOrNull(entry.otherHours) ?? 0;
+  const total = regularHours + overtimeHours + otherHours;
+  return total > 0 ? total : null;
 }
 
 async function recalcPeriodTotals(periodId: number) {
@@ -197,6 +353,164 @@ router.post("/pay-periods/:periodId/hotels", async (req, res): Promise<void> => 
   res.status(201).json(mapPeriodHotel(row));
 });
 
+router.post("/pay-periods/:periodId/hotels/:id/entries/save", async (req, res): Promise<void> => {
+  const periodId = parseId(req.params.periodId);
+  const sectionId = parseId(req.params.id);
+  const { entries } = req.body as { entries?: Array<Record<string, unknown>> };
+
+  if (await isPeriodFinalized(periodId)) {
+    res.status(409).json({ error: "Cannot edit entries in a finalized pay period" });
+    return;
+  }
+
+  if (!Array.isArray(entries)) {
+    res.status(400).json({ error: "entries must be an array" });
+    return;
+  }
+
+  const [section] = await db
+    .select()
+    .from(payPeriodHotelsTable)
+    .where(and(eq(payPeriodHotelsTable.id, sectionId), eq(payPeriodHotelsTable.periodId, periodId)))
+    .limit(1);
+
+  if (!section) {
+    res.status(404).json({ error: "Pay period hotel not found" });
+    return;
+  }
+
+  const [hotel] = await db.select().from(hotelsTable).where(eq(hotelsTable.id, section.hotelId)).limit(1);
+  const existingEntries = await db
+    .select()
+    .from(timeEntriesTable)
+    .where(and(eq(timeEntriesTable.periodId, periodId), eq(timeEntriesTable.payPeriodHotelId, sectionId)));
+
+  const keptIds = new Set<number>();
+  let inserted = 0;
+  let updated = 0;
+
+  for (const rawEntry of entries) {
+    if (!hasRowContent(rawEntry)) continue;
+
+    const workerId = toNumberOrNull(rawEntry.workerId);
+    if (workerId == null) {
+      res.status(400).json({ error: "Each saved row must include a worker" });
+      return;
+    }
+
+    const numericError = [
+      ensureNonNegativeNumber("Regular hours", rawEntry.regularHours),
+      ensureNonNegativeNumber("OT hours", rawEntry.overtimeHours),
+      ensureNonNegativeNumber("Other hours", rawEntry.otherHours),
+      ensureNonNegativeNumber("Total hours", rawEntry.totalHours ?? rawEntry.hoursWorked),
+      ensureNonNegativeNumber("Rate", rawEntry.ratePerHour),
+      ensureNonNegativeNumber("Flat amount", rawEntry.flatAmount),
+    ].find(Boolean);
+
+    if (numericError) {
+      res.status(400).json({ error: numericError });
+      return;
+    }
+
+    const [worker] = await db.select().from(workersTable).where(eq(workersTable.id, workerId)).limit(1);
+    if (!worker) {
+      res.status(404).json({ error: `Worker ${workerId} not found` });
+      return;
+    }
+
+    const resolvedHours = resolveHoursPayload(rawEntry);
+    const resolvedRate = await resolveRatePerHour({
+      workerId,
+      hotelId: section.hotelId,
+      role: rawEntry.role,
+      explicitRate: rawEntry.ratePerHour,
+      worker,
+      hotel,
+    });
+    const resolvedFlatAmount = toNumberOrNull(rawEntry.flatAmount);
+    const explicitTotalAmount = toNumberOrNull(rawEntry.totalAmount);
+    const resolvedTotalAmount = explicitTotalAmount
+      ?? resolvedFlatAmount
+      ?? ((resolvedHours ?? 0) * (resolvedRate ?? 0));
+    const entryType = typeof rawEntry.entryType === "string" && rawEntry.entryType === "subcontractor"
+      ? "subcontractor"
+      : worker.workerType === "subcontractor"
+        ? "subcontractor"
+        : "payroll";
+
+    const values = {
+      periodId,
+      payPeriodHotelId: sectionId,
+      workerId,
+      hotelId: section.hotelId,
+      workerName: worker.name,
+      hotelName: section.hotelName,
+      role: typeof rawEntry.role === "string" && rawEntry.role.trim() ? rawEntry.role.trim() : null,
+      entryType,
+      workDate: typeof rawEntry.workDate === "string" && rawEntry.workDate ? rawEntry.workDate : null,
+      regularHours: toNumberOrNull(rawEntry.regularHours)?.toString() ?? null,
+      overtimeHours: toNumberOrNull(rawEntry.overtimeHours)?.toString() ?? null,
+      otherHours: toNumberOrNull(rawEntry.otherHours)?.toString() ?? null,
+      totalHours: resolvedHours?.toString() ?? null,
+      hoursWorked: resolvedHours?.toString() ?? null,
+      ratePerHour: resolvedRate?.toString() ?? null,
+      flatAmount: resolvedFlatAmount?.toString() ?? null,
+      totalAmount: resolvedTotalAmount.toString(),
+      paymentStatus: "pending" as const,
+      paymentMethod: typeof rawEntry.paymentMethod === "string" ? rawEntry.paymentMethod : worker.paymentMethod,
+      interacEmail: typeof rawEntry.interacEmail === "string" ? rawEntry.interacEmail : worker.interacEmail,
+      notes: typeof rawEntry.notes === "string" && rawEntry.notes.trim() ? rawEntry.notes.trim() : null,
+      region: hotel?.region ?? section.region ?? null,
+    };
+
+    const entryId = toNumberOrNull(rawEntry.id);
+    if (entryId != null) {
+      const [savedEntry] = await db
+        .update(timeEntriesTable)
+        .set(values)
+        .where(and(eq(timeEntriesTable.id, entryId), eq(timeEntriesTable.periodId, periodId), eq(timeEntriesTable.payPeriodHotelId, sectionId)))
+        .returning();
+
+      if (!savedEntry) {
+        res.status(404).json({ error: `Entry ${entryId} not found` });
+        return;
+      }
+
+      keptIds.add(savedEntry.id);
+      updated++;
+    } else {
+      const [savedEntry] = await db.insert(timeEntriesTable).values(values).returning();
+      keptIds.add(savedEntry.id);
+      inserted++;
+    }
+
+    await rememberWorkerHotelRate({
+      workerId,
+      hotelId: section.hotelId,
+      role: rawEntry.role,
+      rate: resolvedRate,
+    });
+  }
+
+  const deletedIds = existingEntries.filter((entry) => !keptIds.has(entry.id)).map((entry) => entry.id);
+  if (deletedIds.length > 0) {
+    for (const entryId of deletedIds) {
+      await db
+        .delete(timeEntriesTable)
+        .where(and(eq(timeEntriesTable.id, entryId), eq(timeEntriesTable.periodId, periodId), eq(timeEntriesTable.payPeriodHotelId, sectionId)));
+    }
+  }
+
+  await recalcPeriodTotals(periodId);
+
+  res.json({
+    inserted,
+    updated,
+    deleted: deletedIds.length,
+    total: inserted + updated,
+  });
+});
+
 router.patch("/pay-periods/:periodId/hotels/:id", async (req, res): Promise<void> => {
   const periodId = parseId(req.params.periodId);
   const id = parseId(req.params.id);
@@ -334,20 +648,29 @@ router.post("/pay-periods/:periodId/entries", async (req, res): Promise<void> =>
     return;
   }
 
-  const resolvedHours = totalHours ?? hoursWorked ?? (Number(regularHours || 0) + Number(overtimeHours || 0) + Number(otherHours || 0));
-  const resolvedAmount =
-    totalAmount ??
-    flatAmount ??
-    (Number.isFinite(Number(resolvedHours)) && Number.isFinite(Number(ratePerHour)) ? Number(resolvedHours) * Number(ratePerHour) : 0);
-
   const [worker] = await db.select().from(workersTable).where(eq(workersTable.id, workerId)).limit(1);
   const workerName = worker?.name || "Unknown";
 
   let hotelName: string | null = null;
+  let hotel: typeof hotelsTable.$inferSelect | null = null;
   if (hotelId) {
-    const [hotel] = await db.select().from(hotelsTable).where(eq(hotelsTable.id, hotelId)).limit(1);
+    [hotel] = await db.select().from(hotelsTable).where(eq(hotelsTable.id, hotelId)).limit(1);
     hotelName = hotel?.name || null;
   }
+
+  const resolvedHours = resolveHoursPayload({ regularHours, overtimeHours, otherHours, totalHours, hoursWorked });
+  const resolvedRate = await resolveRatePerHour({
+    workerId,
+    hotelId: hotelId || null,
+    role,
+    explicitRate: ratePerHour,
+    worker,
+    hotel,
+  });
+  const resolvedAmount =
+    toNumberOrNull(totalAmount) ??
+    toNumberOrNull(flatAmount) ??
+    ((resolvedHours ?? 0) * (resolvedRate ?? 0));
 
   const [entry] = await db
     .insert(timeEntriesTable)
@@ -366,7 +689,7 @@ router.post("/pay-periods/:periodId/entries", async (req, res): Promise<void> =>
       otherHours: otherHours?.toString() ?? null,
       totalHours: resolvedHours?.toString() ?? null,
       hoursWorked: resolvedHours?.toString() ?? null,
-      ratePerHour: ratePerHour?.toString() ?? null,
+      ratePerHour: resolvedRate?.toString() ?? null,
       flatAmount: flatAmount?.toString() ?? null,
       totalAmount: resolvedAmount.toString(),
       paymentStatus: "pending",
@@ -378,6 +701,7 @@ router.post("/pay-periods/:periodId/entries", async (req, res): Promise<void> =>
     .returning();
 
   await recalcPeriodTotals(periodId);
+  await rememberWorkerHotelRate({ workerId, hotelId: hotelId || null, role, rate: resolvedRate });
   res.status(201).json(mapEntry(entry));
 });
 
@@ -501,6 +825,12 @@ router.patch("/pay-periods/:periodId/entries/:id", async (req, res): Promise<voi
   }
 
   await recalcPeriodTotals(periodId);
+  await rememberWorkerHotelRate({
+    workerId: entry.workerId,
+    hotelId: entry.hotelId,
+    role: entry.role,
+    rate: toNumberOrNull(entry.ratePerHour),
+  });
   res.json(mapEntry(entry));
 });
 

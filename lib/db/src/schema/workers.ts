@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, boolean, numeric } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -12,6 +12,7 @@ export const workersTable = pgTable("workers", {
   city: text("city"),
   province: text("province"),
   workerType: text("worker_type").notNull().default("payroll"),
+  defaultRate: numeric("default_rate", { precision: 8, scale: 2 }),
   isActive: boolean("is_active").notNull().default(true),
   interacEmail: text("interac_email"),
   paymentMethod: text("payment_method"),

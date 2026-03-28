@@ -20,6 +20,8 @@ export interface UpdateWorkerBody {
   /** @nullable */
   province?: string | null;
   workerType?: UpdateWorkerBodyWorkerType;
+  /** @nullable */
+  defaultRate?: number | null;
   isActive?: boolean;
   /** @nullable */
   interacEmail?: string | null;

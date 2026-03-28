@@ -96,6 +96,7 @@ export const ListWorkersResponseItem = zod.object({
   city: zod.string().nullish(),
   province: zod.string().nullish(),
   workerType: zod.enum(["payroll", "subcontractor"]),
+  defaultRate: zod.number().nullish(),
   isActive: zod.boolean(),
   interacEmail: zod.string().nullish(),
   paymentMethod: zod.string().nullish(),
@@ -119,6 +120,7 @@ export const CreateWorkerBody = zod.object({
   city: zod.string().nullish(),
   province: zod.string().nullish(),
   workerType: zod.enum(["payroll", "subcontractor"]),
+  defaultRate: zod.number().nullish(),
   interacEmail: zod.string().nullish(),
   paymentMethod: zod.string().nullish(),
   bankName: zod.string().nullish(),
@@ -144,6 +146,7 @@ export const GetWorkerResponse = zod.object({
   city: zod.string().nullish(),
   province: zod.string().nullish(),
   workerType: zod.enum(["payroll", "subcontractor"]),
+  defaultRate: zod.number().nullish(),
   isActive: zod.boolean(),
   interacEmail: zod.string().nullish(),
   paymentMethod: zod.string().nullish(),
@@ -170,6 +173,7 @@ export const UpdateWorkerBody = zod.object({
   city: zod.string().nullish(),
   province: zod.string().nullish(),
   workerType: zod.enum(["payroll", "subcontractor"]).optional(),
+  defaultRate: zod.number().nullish(),
   isActive: zod.boolean().optional(),
   interacEmail: zod.string().nullish(),
   paymentMethod: zod.string().nullish(),
@@ -189,6 +193,7 @@ export const UpdateWorkerResponse = zod.object({
   city: zod.string().nullish(),
   province: zod.string().nullish(),
   workerType: zod.enum(["payroll", "subcontractor"]),
+  defaultRate: zod.number().nullish(),
   isActive: zod.boolean(),
   interacEmail: zod.string().nullish(),
   paymentMethod: zod.string().nullish(),
@@ -228,6 +233,17 @@ export const ListHotelsResponseItem = zod.object({
   contactEmail: zod.string().nullish(),
   isActive: zod.boolean(),
   notes: zod.string().nullish(),
+  hiringStatus: zod.string(),
+  payRate: zod.string(),
+  jobPosition: zod.string(),
+  positions: zod.array(
+    zod.object({
+      title: zod.string().nullish(),
+      rate: zod.union([zod.number(), zod.string()]).nullish(),
+      rateType: zod.string().nullish(),
+      notes: zod.string().nullish(),
+    }),
+  ),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -268,6 +284,17 @@ export const GetHotelResponse = zod.object({
   contactEmail: zod.string().nullish(),
   isActive: zod.boolean(),
   notes: zod.string().nullish(),
+  hiringStatus: zod.string(),
+  payRate: zod.string(),
+  jobPosition: zod.string(),
+  positions: zod.array(
+    zod.object({
+      title: zod.string().nullish(),
+      rate: zod.union([zod.number(), zod.string()]).nullish(),
+      rateType: zod.string().nullish(),
+      notes: zod.string().nullish(),
+    }),
+  ),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -305,6 +332,17 @@ export const UpdateHotelResponse = zod.object({
   contactEmail: zod.string().nullish(),
   isActive: zod.boolean(),
   notes: zod.string().nullish(),
+  hiringStatus: zod.string(),
+  payRate: zod.string(),
+  jobPosition: zod.string(),
+  positions: zod.array(
+    zod.object({
+      title: zod.string().nullish(),
+      rate: zod.union([zod.number(), zod.string()]).nullish(),
+      rateType: zod.string().nullish(),
+      notes: zod.string().nullish(),
+    }),
+  ),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -315,6 +353,26 @@ export const UpdateHotelResponse = zod.object({
 export const DeleteHotelParams = zod.object({
   id: zod.coerce.number(),
 });
+
+/**
+ * @summary List saved worker rate overrides for a hotel
+ */
+export const ListHotelWorkerRatesParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ListHotelWorkerRatesResponseItem = zod.object({
+  id: zod.number(),
+  workerId: zod.number(),
+  hotelId: zod.number(),
+  role: zod.string().nullish(),
+  rate: zod.number(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+export const ListHotelWorkerRatesResponse = zod.array(
+  ListHotelWorkerRatesResponseItem,
+);
 
 /**
  * @summary List all pay periods
@@ -367,12 +425,18 @@ export const GetPayPeriodResponse = zod.object({
     zod.object({
       id: zod.number(),
       periodId: zod.number(),
+      payPeriodHotelId: zod.number().nullish(),
       workerId: zod.number(),
       hotelId: zod.number().nullish(),
       workerName: zod.string(),
       hotelName: zod.string().nullish(),
+      role: zod.string().nullish(),
       entryType: zod.enum(["payroll", "subcontractor"]),
       workDate: zod.string().nullish(),
+      regularHours: zod.number().nullish(),
+      overtimeHours: zod.number().nullish(),
+      otherHours: zod.number().nullish(),
+      totalHours: zod.number().nullish(),
       hoursWorked: zod.number().nullish(),
       ratePerHour: zod.number().nullish(),
       flatAmount: zod.number().nullish(),
@@ -457,12 +521,18 @@ export const ListTimeEntriesQueryParams = zod.object({
 export const ListTimeEntriesResponseItem = zod.object({
   id: zod.number(),
   periodId: zod.number(),
+  payPeriodHotelId: zod.number().nullish(),
   workerId: zod.number(),
   hotelId: zod.number().nullish(),
   workerName: zod.string(),
   hotelName: zod.string().nullish(),
+  role: zod.string().nullish(),
   entryType: zod.enum(["payroll", "subcontractor"]),
   workDate: zod.string().nullish(),
+  regularHours: zod.number().nullish(),
+  overtimeHours: zod.number().nullish(),
+  otherHours: zod.number().nullish(),
+  totalHours: zod.number().nullish(),
   hoursWorked: zod.number().nullish(),
   ratePerHour: zod.number().nullish(),
   flatAmount: zod.number().nullish(),
@@ -486,9 +556,15 @@ export const CreateTimeEntryParams = zod.object({
 
 export const CreateTimeEntryBody = zod.object({
   workerId: zod.number(),
+  payPeriodHotelId: zod.number().nullish(),
   hotelId: zod.number().nullish(),
+  role: zod.string().nullish(),
   entryType: zod.enum(["payroll", "subcontractor"]),
   workDate: zod.string().nullish(),
+  regularHours: zod.number().nullish(),
+  overtimeHours: zod.number().nullish(),
+  otherHours: zod.number().nullish(),
+  totalHours: zod.number().nullish(),
   hoursWorked: zod.number().nullish(),
   ratePerHour: zod.number().nullish(),
   flatAmount: zod.number().nullish(),
@@ -509,9 +585,15 @@ export const UpdateTimeEntryParams = zod.object({
 
 export const UpdateTimeEntryBody = zod.object({
   workerId: zod.number().optional(),
+  payPeriodHotelId: zod.number().nullish(),
   hotelId: zod.number().nullish(),
+  role: zod.string().nullish(),
   entryType: zod.enum(["payroll", "subcontractor"]).optional(),
   workDate: zod.string().nullish(),
+  regularHours: zod.number().nullish(),
+  overtimeHours: zod.number().nullish(),
+  otherHours: zod.number().nullish(),
+  totalHours: zod.number().nullish(),
   hoursWorked: zod.number().nullish(),
   ratePerHour: zod.number().nullish(),
   flatAmount: zod.number().nullish(),
@@ -528,12 +610,18 @@ export const UpdateTimeEntryBody = zod.object({
 export const UpdateTimeEntryResponse = zod.object({
   id: zod.number(),
   periodId: zod.number(),
+  payPeriodHotelId: zod.number().nullish(),
   workerId: zod.number(),
   hotelId: zod.number().nullish(),
   workerName: zod.string(),
   hotelName: zod.string().nullish(),
+  role: zod.string().nullish(),
   entryType: zod.enum(["payroll", "subcontractor"]),
   workDate: zod.string().nullish(),
+  regularHours: zod.number().nullish(),
+  overtimeHours: zod.number().nullish(),
+  otherHours: zod.number().nullish(),
+  totalHours: zod.number().nullish(),
   hoursWorked: zod.number().nullish(),
   ratePerHour: zod.number().nullish(),
   flatAmount: zod.number().nullish(),
@@ -566,9 +654,15 @@ export const BulkUpsertTimeEntriesBody = zod.object({
   entries: zod.array(
     zod.object({
       workerId: zod.number(),
+      payPeriodHotelId: zod.number().nullish(),
       hotelId: zod.number().nullish(),
+      role: zod.string().nullish(),
       entryType: zod.enum(["payroll", "subcontractor"]),
       workDate: zod.string().nullish(),
+      regularHours: zod.number().nullish(),
+      overtimeHours: zod.number().nullish(),
+      otherHours: zod.number().nullish(),
+      totalHours: zod.number().nullish(),
       hoursWorked: zod.number().nullish(),
       ratePerHour: zod.number().nullish(),
       flatAmount: zod.number().nullish(),
@@ -585,6 +679,44 @@ export const BulkUpsertTimeEntriesBody = zod.object({
 export const BulkUpsertTimeEntriesResponse = zod.object({
   inserted: zod.number(),
   updated: zod.number(),
+  total: zod.number(),
+});
+
+/**
+ * @summary Save all entries for one pay-period hotel section
+ */
+export const SaveHotelSectionEntriesParams = zod.object({
+  periodId: zod.coerce.number(),
+  id: zod.coerce.number(),
+});
+
+export const SaveHotelSectionEntriesBody = zod.object({
+  entries: zod.array(
+    zod.object({
+      id: zod.number().nullish(),
+      workerId: zod.number().nullish(),
+      role: zod.string().nullish(),
+      entryType: zod.enum(["payroll", "subcontractor"]).optional(),
+      workDate: zod.string().nullish(),
+      regularHours: zod.number().nullish(),
+      overtimeHours: zod.number().nullish(),
+      otherHours: zod.number().nullish(),
+      totalHours: zod.number().nullish(),
+      hoursWorked: zod.number().nullish(),
+      ratePerHour: zod.number().nullish(),
+      flatAmount: zod.number().nullish(),
+      totalAmount: zod.number().nullish(),
+      paymentMethod: zod.string().nullish(),
+      interacEmail: zod.string().nullish(),
+      notes: zod.string().nullish(),
+    }),
+  ),
+});
+
+export const SaveHotelSectionEntriesResponse = zod.object({
+  inserted: zod.number(),
+  updated: zod.number(),
+  deleted: zod.number(),
   total: zod.number(),
 });
 

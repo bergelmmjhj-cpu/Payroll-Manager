@@ -18,6 +18,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card, StatusBadge, Button, Dialog, Input, Label } from "@/components/ui";
+import { HotelHoursSheet, type PayPeriodHotelSection } from "@/components/HotelHoursSheet";
 import { formatDate, formatCurrency, cn } from "@/lib/utils";
 import {
   Building2,
@@ -50,15 +51,6 @@ type EntryFormState = {
   ratePerHour: string;
   flatAmount: string;
   notes: string;
-};
-
-type PayPeriodHotelSection = {
-  id: number;
-  periodId: number;
-  hotelId: number;
-  hotelName: string;
-  region?: string | null;
-  notes?: string | null;
 };
 
 function formatWorkDate(value?: string | null): string {
@@ -118,12 +110,13 @@ export default function PayPeriodDetail({ params }: { params: { id: string } }) 
   const hasWorkers = workerCount > 0;
   const hasHotels = hotelCount > 0;
 
-  const [activeTab, setActiveTab] = useState("hours");
+  const [activeTab, setActiveTab] = useState("hotel");
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
   const [selectedSectionHotelId, setSelectedSectionHotelId] = useState<number | null>(null);
-  const [sections, setSections] = useState<PayPeriodHotelSection[]>([]);
+  const [sections, setSections] = useState<PayPeriodHotelSection[]>([]); 
   const [isSectionsLoading, setIsSectionsLoading] = useState(false);
+  const [editingSectionId, setEditingSectionId] = useState<number | null>(null);
 
   const fetchSections = async () => {
     setIsSectionsLoading(true);
@@ -194,14 +187,18 @@ export default function PayPeriodDetail({ params }: { params: { id: string } }) 
   }
 
   const tabs = [
-    { id: "sections", label: "Hotel Sections", icon: Building2 },
-    { id: "hours", label: "Add Hours", icon: Plus },
     { id: "hotel", label: "By Hotel", icon: Building2 },
+    { id: "hours", label: "Add Hours", icon: Plus },
     { id: "worker", label: "By Worker", icon: Users },
     { id: "tally", label: "Tally", icon: Receipt },
     { id: "payment", label: "Payment Prep", icon: Send },
     { id: "export", label: "Export", icon: FileDown },
   ];
+
+  const handleOpenSectionEditor = (sectionId: number) => {
+    setEditingSectionId(sectionId);
+  };
+
 
   const handleAddEntry = (hotelId?: number) => {
     if (!hasWorkers) {
@@ -251,45 +248,39 @@ export default function PayPeriodDetail({ params }: { params: { id: string } }) 
   };
 
   return (
-    <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
-      <Card className="p-8 bg-gradient-to-r from-primary to-primary/80 text-primary-foreground border-none shadow-xl">
-        <div className="flex flex-col gap-6">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+    <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+      <Card className="border-none bg-gradient-to-r from-primary to-primary/85 p-6 text-primary-foreground shadow-xl">
+        <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <div className="flex items-center gap-4 mb-2">
-                <h1 className="text-4xl font-black">{period.name}</h1>
-                <span className="bg-white/20 px-3 py-1 rounded-full text-sm font-bold uppercase tracking-wider">
+              <div className="mb-2 flex items-center gap-3">
+                <h1 className="text-3xl font-black">{period.name}</h1>
+                <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-bold uppercase tracking-wider">
                   {period.status.replace("_", " ")}
                 </span>
               </div>
-              <p className="text-xl text-primary-foreground/80 font-medium">
+              <p className="text-base font-medium text-primary-foreground/80">
                 {formatDate(period.startDate)} to {formatDate(period.endDate)}
               </p>
             </div>
-            <div className="flex gap-8 bg-black/20 p-4 rounded-2xl backdrop-blur-sm">
-              <div>
-                <p className="text-sm font-bold text-primary-foreground/70 uppercase">Payroll</p>
-                <p className="text-2xl font-bold">{formatCurrency(period.totalPayroll)}</p>
-              </div>
-              <div>
-                <p className="text-sm font-bold text-primary-foreground/70 uppercase">Subcontractors</p>
-                <p className="text-2xl font-bold">{formatCurrency(period.totalSubcontractors)}</p>
-              </div>
-              <div className="border-l border-white/20 pl-8">
-                <p className="text-sm font-bold text-emerald-300 uppercase">Grand Total</p>
-                <p className="text-4xl font-black text-white">{formatCurrency(period.totalGrand)}</p>
-              </div>
+            <div className="grid min-w-[280px] grid-cols-3 gap-3 rounded-2xl bg-black/20 p-4 backdrop-blur-sm">
+              <HeaderMetric label="Payroll" value={formatCurrency(period.totalPayroll)} />
+              <HeaderMetric label="Subcontractors" value={formatCurrency(period.totalSubcontractors)} />
+              <HeaderMetric label="Grand Total" value={formatCurrency(period.totalGrand)} emphasis />
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-4">
+          <div className="flex flex-wrap gap-3">
+            <Button onClick={() => setActiveTab("hotel")} className="gap-2 bg-white text-primary hover:bg-white/90">
+              <Building2 className="w-4 h-4" /> By Hotel
+            </Button>
             <Button onClick={() => handleAddEntry()} className="bg-white text-primary hover:bg-white/90 gap-2">
               <Plus className="w-5 h-5" /> Add Hours
             </Button>
             <Button
               onClick={() => setLocation("/import")}
               variant="outline"
-              className="gap-2 border-white/40 bg-transparent text-white hover:bg-white/10 hover:text-white"
+              className="gap-2 border-white/40 bg-transparent text-white hover:bg-white/10 hover:text-white" 
             >
               <UploadCloud className="w-5 h-5" /> Optional Excel Import
             </Button>
@@ -359,19 +350,19 @@ export default function PayPeriodDetail({ params }: { params: { id: string } }) 
             isDeleting={deleteEntry.isPending}
           />
         )}
-        {activeTab === "sections" && (
+        {activeTab === "hotel" && (
           <HotelSectionsTab
             periodId={periodId}
+            periodStatus={period.status}
             hotels={hotels ?? []}
             entries={period.entries}
             sections={sections}
             isLoading={isSectionsLoading}
             onAddSection={handleAddSection}
-            onAddEntry={handleAddEntry}
+            onEnterHours={handleOpenSectionEditor}
             onEditEntry={handleEditEntry}
           />
         )}
-        {activeTab === "hotel" && <GroupedEntriesTab entries={period.entries} groupBy="hotelName" />}
         {activeTab === "worker" && <GroupedEntriesTab entries={period.entries} groupBy="workerName" />}
         {activeTab === "tally" && <TallyTab periodId={period.id} />}
         {activeTab === "payment" && <PaymentPrepTab payments={period.payments} />}
@@ -394,6 +385,28 @@ export default function PayPeriodDetail({ params }: { params: { id: string } }) 
         onSubmit={handleSubmitEntry}
         isSaving={createEntry.isPending || updateEntry.isPending}
       />
+
+      <HotelHoursSheet
+        open={editingSectionId != null}
+        periodId={periodId}
+        periodStartDate={period.startDate}
+        locked={period.status === "finalized"}
+        section={sections.find((section) => section.id === editingSectionId) ?? null}
+        entries={period.entries}
+        workers={workers ?? []}
+        hotels={hotels ?? []}
+        onClose={() => setEditingSectionId(null)}
+        onSaved={refreshPeriod}
+      />
+    </div>
+  );
+}
+
+function HeaderMetric({ label, value, emphasis = false }: { label: string; value: string; emphasis?: boolean }) {
+  return (
+    <div>
+      <p className="text-[11px] font-bold uppercase tracking-wide text-primary-foreground/70">{label}</p>
+      <p className={cn("text-xl font-bold", emphasis && "text-emerald-300")}>{value}</p>
     </div>
   );
 }
@@ -563,21 +576,23 @@ function GroupedEntriesTab({ entries, groupBy }: { entries: TimeEntry[]; groupBy
 }
 
 function HotelSectionsTab({
+  periodStatus,
   hotels,
   entries,
   sections,
   isLoading,
   onAddSection,
-  onAddEntry,
+  onEnterHours,
   onEditEntry,
 }: {
   periodId: number;
+  periodStatus: string;
   hotels: Hotel[];
   entries: TimeEntry[];
   sections: PayPeriodHotelSection[];
   isLoading: boolean;
   onAddSection: (hotelId: number) => Promise<void>;
-  onAddEntry: (hotelId?: number) => void;
+  onEnterHours: (sectionId: number) => void;
   onEditEntry: (entry: TimeEntry) => void;
 }) {
   const [newHotelId, setNewHotelId] = useState("");
@@ -603,19 +618,40 @@ function HotelSectionsTab({
     }
   };
 
+  const overview = entries.reduce(
+    (totals, entry) => {
+      totals.hours += entry.totalHours ?? entry.hoursWorked ?? 0;
+      totals.amount += entry.totalAmount;
+      if (entry.workerId) totals.workerIds.add(entry.workerId);
+      return totals;
+    },
+    { hours: 0, amount: 0, workerIds: new Set<number>() },
+  );
+
   return (
-    <div className="space-y-6">
-      <Card className="p-6 bg-secondary/40">
-        <h2 className="text-2xl font-bold mb-2">Manual Entry by Hotel</h2>
-        <p className="text-muted-foreground mb-4">Create hotel sections first, then add workers and hours directly inside each section.</p>
-        <div className="flex flex-col md:flex-row gap-3">
+    <div className="space-y-4">
+      <Card className="border border-border/60 p-4 shadow-sm">
+        <div className="mb-4 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
+          <div>
+            <h2 className="text-xl font-bold">By Hotel</h2>
+            <p className="text-sm text-muted-foreground">Add hotels, open Enter Hours, and move through manual timesheets one hotel at a time.</p>
+          </div>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <CompactMetric label="Hotels" value={String(sections.length)} />
+            <CompactMetric label="Workers" value={String(overview.workerIds.size)} />
+            <CompactMetric label="Hours" value={overview.hours.toFixed(2)} />
+            <CompactMetric label="Payroll" value={formatCurrency(overview.amount)} />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3 md:flex-row">
           <select value={newHotelId} onChange={(event) => setNewHotelId(event.target.value)} className={SELECT_CLASS}>
             <option value="">Choose a hotel to add...</option>
             {availableHotels.map((hotel) => (
               <option key={hotel.id} value={hotel.id}>{hotel.name}</option>
             ))}
           </select>
-          <Button onClick={handleAddSection} disabled={!newHotelId || isAdding}>
+          <Button onClick={handleAddSection} disabled={!newHotelId || isAdding || periodStatus === "finalized"}>
             Add Hotel Section
           </Button>
         </div>
@@ -632,52 +668,56 @@ function HotelSectionsTab({
         const sectionTotal = sectionEntries.reduce((sum, entry) => sum + entry.totalAmount, 0);
 
         return (
-          <Card key={section.id} className="overflow-hidden">
-            <div className="bg-secondary p-4 px-6 border-b flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div>
-                <h3 className="text-2xl font-bold">{section.hotelName}</h3>
-                <p className="text-muted-foreground">{section.region || "No region"} • {sectionEntries.length} entries</p>
-              </div>
-              <div className="flex items-center gap-3">
-                <p className="text-xl font-bold">{formatCurrency(sectionTotal)}</p>
-                <Button onClick={() => onAddEntry(section.hotelId)} className="gap-2">
-                  <Plus className="w-4 h-4" /> Add Worker Hours
-                </Button>
+          <Card key={section.id} className="overflow-hidden border border-border/60 shadow-sm">
+            <div className="border-b bg-secondary/35 px-4 py-3">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h3 className="text-lg font-bold">{section.hotelName}</h3>
+                  <p className="text-sm text-muted-foreground">{section.region || "No region"} • {new Set(sectionEntries.map((entry) => entry.workerId)).size} workers • {(sectionEntries.reduce((sum, entry) => sum + (entry.totalHours ?? entry.hoursWorked ?? 0), 0)).toFixed(2)} hours</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <p className="text-lg font-bold">{formatCurrency(sectionTotal)}</p>
+                  <Button onClick={() => onEnterHours(section.id)} className="h-10 gap-2 px-4 text-sm" disabled={periodStatus === "finalized"}>
+                    <Plus className="w-4 h-4" /> Enter Hours
+                  </Button>
+                </div>
               </div>
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-left">
+              <table className="w-full text-left text-sm">
                 <thead className="bg-card">
                   <tr>
-                    <th className="p-4 font-semibold text-muted-foreground">Worker</th>
-                    <th className="p-4 font-semibold text-muted-foreground">Role</th>
-                    <th className="p-4 font-semibold text-muted-foreground text-right">Reg</th>
-                    <th className="p-4 font-semibold text-muted-foreground text-right">OT</th>
-                    <th className="p-4 font-semibold text-muted-foreground text-right">Other</th>
-                    <th className="p-4 font-semibold text-muted-foreground text-right">Total Hours</th>
-                    <th className="p-4 font-semibold text-muted-foreground text-right">Total</th>
-                    <th className="p-4 font-semibold text-muted-foreground text-right">Actions</th>
+                    <th className="px-4 py-2 font-semibold text-muted-foreground">Worker</th>
+                    <th className="px-4 py-2 font-semibold text-muted-foreground">Role</th>
+                    <th className="px-4 py-2 font-semibold text-muted-foreground text-right">Reg</th>
+                    <th className="px-4 py-2 font-semibold text-muted-foreground text-right">OT</th>
+                    <th className="px-4 py-2 font-semibold text-muted-foreground text-right">Other</th>
+                    <th className="px-4 py-2 font-semibold text-muted-foreground text-right">Rate</th>
+                    <th className="px-4 py-2 font-semibold text-muted-foreground text-right">Total Hours</th>
+                    <th className="px-4 py-2 font-semibold text-muted-foreground text-right">Total</th>
+                    <th className="px-4 py-2 font-semibold text-muted-foreground text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {sectionEntries.length === 0 ? (
                     <tr className="border-t">
-                      <td className="p-4 text-muted-foreground" colSpan={8}>No entries yet for this hotel section.</td>
+                      <td className="px-4 py-4 text-muted-foreground" colSpan={9}>No entries yet for this hotel section.</td>
                     </tr>
                   ) : (
                     sectionEntries.map((entry) => (
                       <tr key={entry.id} className="border-t hover:bg-accent/30">
-                        <td className="p-4 font-medium">{entry.workerName}</td>
-                        <td className="p-4 text-muted-foreground">{entry.role || "-"}</td>
-                        <td className="p-4 text-right">{entry.regularHours ?? "-"}</td>
-                        <td className="p-4 text-right">{entry.overtimeHours ?? "-"}</td>
-                        <td className="p-4 text-right">{entry.otherHours ?? "-"}</td>
-                        <td className="p-4 text-right">{entry.totalHours ?? entry.hoursWorked ?? "-"}</td>
-                        <td className="p-4 text-right font-bold">{formatCurrency(entry.totalAmount)}</td>
-                        <td className="p-4">
+                        <td className="px-4 py-2 font-medium">{entry.workerName}</td>
+                        <td className="px-4 py-2 text-muted-foreground">{entry.role || "-"}</td>
+                        <td className="px-4 py-2 text-right">{entry.regularHours ?? "-"}</td>
+                        <td className="px-4 py-2 text-right">{entry.overtimeHours ?? "-"}</td>
+                        <td className="px-4 py-2 text-right">{entry.otherHours ?? "-"}</td>
+                        <td className="px-4 py-2 text-right">{entry.ratePerHour != null ? formatCurrency(entry.ratePerHour) : "-"}</td>
+                        <td className="px-4 py-2 text-right">{entry.totalHours ?? entry.hoursWorked ?? "-"}</td>
+                        <td className="px-4 py-2 text-right font-bold">{formatCurrency(entry.totalAmount)}</td>
+                        <td className="px-4 py-2">
                           <div className="flex justify-end">
-                            <Button variant="outline" className="px-3" onClick={() => onEditEntry(entry)}>
+                            <Button variant="outline" className="h-8 px-3 text-sm" onClick={() => onEditEntry(entry)}>
                               <Pencil className="w-4 h-4" />
                             </Button>
                           </div>
@@ -691,6 +731,15 @@ function HotelSectionsTab({
           </Card>
         );
       })}
+    </div>
+  );
+}
+
+function CompactMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-border/60 bg-secondary/20 px-3 py-2">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-sm font-semibold text-foreground">{value}</p>
     </div>
   );
 }

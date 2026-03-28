@@ -11,7 +11,10 @@ function parseId(raw: string | string[]): number {
 }
 
 function mapWorker(w: typeof workersTable.$inferSelect) {
-  return { ...w };
+  return {
+    ...w,
+    defaultRate: w.defaultRate != null ? Number(w.defaultRate) : null,
+  };
 }
 
 router.get("/workers", async (req, res): Promise<void> => {
@@ -43,7 +46,22 @@ router.get("/workers", async (req, res): Promise<void> => {
 });
 
 router.post("/workers", async (req, res): Promise<void> => {
-  const { name, email, phone, address, city, province, workerType, interacEmail, paymentMethod, bankName, bankAccount, sinNumber, notes } = req.body;
+  const {
+    name,
+    email,
+    phone,
+    address,
+    city,
+    province,
+    workerType,
+    defaultRate,
+    interacEmail,
+    paymentMethod,
+    bankName,
+    bankAccount,
+    sinNumber,
+    notes,
+  } = req.body;
 
   if (!name) {
     res.status(400).json({ error: "name is required" });
@@ -52,7 +70,23 @@ router.post("/workers", async (req, res): Promise<void> => {
 
   const [worker] = await db
     .insert(workersTable)
-    .values({ name, email, phone, address, city, province, workerType: workerType || "payroll", interacEmail, paymentMethod, bankName, bankAccount, sinNumber, notes, isActive: true })
+    .values({
+      name,
+      email,
+      phone,
+      address,
+      city,
+      province,
+      workerType: workerType || "payroll",
+      defaultRate: defaultRate != null ? String(defaultRate) : null,
+      interacEmail,
+      paymentMethod,
+      bankName,
+      bankAccount,
+      sinNumber,
+      notes,
+      isActive: true,
+    })
     .returning();
 
   res.status(201).json(mapWorker(worker));
@@ -72,7 +106,23 @@ router.get("/workers/:id", async (req, res): Promise<void> => {
 
 router.patch("/workers/:id", async (req, res): Promise<void> => {
   const id = parseId(req.params.id);
-  const { name, email, phone, address, city, province, workerType, isActive, interacEmail, paymentMethod, bankName, bankAccount, sinNumber, notes } = req.body;
+  const {
+    name,
+    email,
+    phone,
+    address,
+    city,
+    province,
+    workerType,
+    defaultRate,
+    isActive,
+    interacEmail,
+    paymentMethod,
+    bankName,
+    bankAccount,
+    sinNumber,
+    notes,
+  } = req.body;
 
   const update: Partial<typeof workersTable.$inferInsert> = {};
   if (name !== undefined) update.name = name;
@@ -82,6 +132,7 @@ router.patch("/workers/:id", async (req, res): Promise<void> => {
   if (city !== undefined) update.city = city;
   if (province !== undefined) update.province = province;
   if (workerType !== undefined) update.workerType = workerType;
+  if (defaultRate !== undefined) update.defaultRate = defaultRate != null ? String(defaultRate) : null;
   if (isActive !== undefined) update.isActive = isActive;
   if (interacEmail !== undefined) update.interacEmail = interacEmail;
   if (paymentMethod !== undefined) update.paymentMethod = paymentMethod;

@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, hotelsTable } from "@workspace/db";
+import { db, hotelsTable, workerHotelRatesTable } from "@workspace/db";
 import { eq, ilike, or, and } from "drizzle-orm";
 
 const router: IRouter = Router();
@@ -59,6 +59,28 @@ router.get("/hotels/:id", async (req, res): Promise<void> => {
   }
 
   res.json(hotel);
+});
+
+router.get("/hotels/:id/worker-rates", async (req, res): Promise<void> => {
+  const id = parseId(req.params.id);
+
+  const [hotel] = await db.select({ id: hotelsTable.id }).from(hotelsTable).where(eq(hotelsTable.id, id)).limit(1);
+  if (!hotel) {
+    res.status(404).json({ error: "Hotel not found" });
+    return;
+  }
+
+  const rates = await db
+    .select()
+    .from(workerHotelRatesTable)
+    .where(eq(workerHotelRatesTable.hotelId, id));
+
+  res.json(
+    rates.map((rate) => ({
+      ...rate,
+      rate: Number(rate.rate),
+    })),
+  );
 });
 
 router.patch("/hotels/:id", async (req, res): Promise<void> => {

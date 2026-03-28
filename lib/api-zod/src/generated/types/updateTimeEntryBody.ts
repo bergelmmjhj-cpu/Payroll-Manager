@@ -11,10 +11,22 @@ import type { UpdateTimeEntryBodyPaymentStatus } from "./updateTimeEntryBodyPaym
 export interface UpdateTimeEntryBody {
   workerId?: number;
   /** @nullable */
+  payPeriodHotelId?: number | null;
+  /** @nullable */
   hotelId?: number | null;
+  /** @nullable */
+  role?: string | null;
   entryType?: UpdateTimeEntryBodyEntryType;
   /** @nullable */
   workDate?: string | null;
+  /** @nullable */
+  regularHours?: number | null;
+  /** @nullable */
+  overtimeHours?: number | null;
+  /** @nullable */
+  otherHours?: number | null;
+  /** @nullable */
+  totalHours?: number | null;
   /** @nullable */
   hoursWorked?: number | null;
   /** @nullable */

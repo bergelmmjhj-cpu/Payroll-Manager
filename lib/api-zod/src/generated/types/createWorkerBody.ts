@@ -21,6 +21,8 @@ export interface CreateWorkerBody {
   province?: string | null;
   workerType: CreateWorkerBodyWorkerType;
   /** @nullable */
+  defaultRate?: number | null;
+  /** @nullable */
   interacEmail?: string | null;
   /** @nullable */
   paymentMethod?: string | null;

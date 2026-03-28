@@ -23,6 +23,8 @@ export interface Worker {
   /** @nullable */
   province?: string | null;
   workerType: WorkerWorkerType;
+  /** @nullable */
+  defaultRate?: number | null;
   isActive: boolean;
   /** @nullable */
   interacEmail?: string | null;

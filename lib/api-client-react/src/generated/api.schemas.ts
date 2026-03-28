@@ -93,6 +93,8 @@ export interface Worker {
   /** @nullable */
   province?: string | null;
   workerType: WorkerWorkerType;
+  /** @nullable */
+  defaultRate?: number | null;
   isActive: boolean;
   /** @nullable */
   interacEmail?: string | null;
@@ -132,6 +134,8 @@ export interface CreateWorkerBody {
   province?: string | null;
   workerType: CreateWorkerBodyWorkerType;
   /** @nullable */
+  defaultRate?: number | null;
+  /** @nullable */
   interacEmail?: string | null;
   /** @nullable */
   paymentMethod?: string | null;
@@ -166,6 +170,8 @@ export interface UpdateWorkerBody {
   /** @nullable */
   province?: string | null;
   workerType?: UpdateWorkerBodyWorkerType;
+  /** @nullable */
+  defaultRate?: number | null;
   isActive?: boolean;
   /** @nullable */
   interacEmail?: string | null;
@@ -177,6 +183,17 @@ export interface UpdateWorkerBody {
   bankAccount?: string | null;
   /** @nullable */
   sinNumber?: string | null;
+  /** @nullable */
+  notes?: string | null;
+}
+
+export interface HotelPosition {
+  /** @nullable */
+  title?: string | null;
+  /** @nullable */
+  rate?: number | string | null;
+  /** @nullable */
+  rateType?: string | null;
   /** @nullable */
   notes?: string | null;
 }
@@ -203,6 +220,21 @@ export interface Hotel {
   isActive: boolean;
   /** @nullable */
   notes?: string | null;
+  hiringStatus: string;
+  payRate: string;
+  jobPosition: string;
+  positions: HotelPosition[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkerHotelRate {
+  id: number;
+  workerId: number;
+  hotelId: number;
+  /** @nullable */
+  role?: string | null;
+  rate: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -373,22 +405,8 @@ export interface PayPeriodDetail {
   notes?: string | null;
   createdAt: string;
   updatedAt: string;
-  periodHotels?: PayPeriodHotel[];
   entries: TimeEntry[];
   payments: Payment[];
-}
-
-export interface PayPeriodHotel {
-  id: number;
-  periodId: number;
-  hotelId: number;
-  hotelName: string;
-  /** @nullable */
-  region?: string | null;
-  /** @nullable */
-  notes?: string | null;
-  createdAt: string;
-  updatedAt: string;
 }
 
 export interface CreatePayPeriodBody {
@@ -522,9 +540,62 @@ export interface BulkUpsertTimeEntriesBody {
   replaceAll?: boolean;
 }
 
+export type HotelSectionEntryInputEntryType =
+  (typeof HotelSectionEntryInputEntryType)[keyof typeof HotelSectionEntryInputEntryType];
+
+export const HotelSectionEntryInputEntryType = {
+  payroll: "payroll",
+  subcontractor: "subcontractor",
+} as const;
+
+export interface HotelSectionEntryInput {
+  /** @nullable */
+  id?: number | null;
+  /** @nullable */
+  workerId?: number | null;
+  /** @nullable */
+  role?: string | null;
+  entryType?: HotelSectionEntryInputEntryType;
+  /** @nullable */
+  workDate?: string | null;
+  /** @nullable */
+  regularHours?: number | null;
+  /** @nullable */
+  overtimeHours?: number | null;
+  /** @nullable */
+  otherHours?: number | null;
+  /** @nullable */
+  totalHours?: number | null;
+  /** @nullable */
+  hoursWorked?: number | null;
+  /** @nullable */
+  ratePerHour?: number | null;
+  /** @nullable */
+  flatAmount?: number | null;
+  /** @nullable */
+  totalAmount?: number | null;
+  /** @nullable */
+  paymentMethod?: string | null;
+  /** @nullable */
+  interacEmail?: string | null;
+  /** @nullable */
+  notes?: string | null;
+}
+
+export interface BulkSaveHotelEntriesBody {
+  entries: HotelSectionEntryInput[];
+}
+
 export interface BulkUpsertResult {
   inserted: number;
   updated: number;
+  total: number;
+}
+
+export interface HotelSectionSaveResult {
+  inserted: number;
+  updated: number;
+  deleted: number;
   total: number;
 }
 

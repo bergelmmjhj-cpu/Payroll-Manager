@@ -8,6 +8,11 @@ export interface SyncResult {
   updated: number;
   skipped: number;
   errors: number;
+  skippedByReason?: {
+    notApproved: number;
+    missingId: number;
+    missingName: number;
+  };
 }
 
 /**
@@ -56,6 +61,10 @@ function resolveName(app: WfApplication): string {
   return [first, last].filter(Boolean).join(" ");
 }
 
+function isApprovedStatus(status?: string): boolean {
+  return (status ?? "").trim().toLowerCase() === "approved";
+}
+
 /**
  * Fetches applications from WF Connect and upserts them into the local
  * workers table, keyed by `wfconnect_<id>` in the renderDbId column.
@@ -72,9 +81,10 @@ export async function syncWfConnectApplications(): Promise<SyncResult> {
     throw new Error("WFCONNECT_API_KEY is not set");
   }
 
-  logger.info({ apiBase }, "Fetching applications from WF Connect");
+  const url = `${apiBase}/admin/applications`;
+  logger.info({ url }, "Fetching applications from WF Connect");
 
-  const response = await fetch(`${apiBase}/admin/applications`, {
+  const response = await fetch(url, {
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
@@ -88,7 +98,28 @@ export async function syncWfConnectApplications(): Promise<SyncResult> {
     );
   }
 
-  const raw = (await response.json()) as WfApiResponse;
+  const bodyText = await response.text();
+  if (!bodyText.trim()) {
+    throw new Error("WF Connect API returned an empty response body");
+  }
+
+  let raw: WfApiResponse;
+  try {
+    raw = JSON.parse(bodyText) as WfApiResponse;
+  } catch (err) {
+    const preview = bodyText.slice(0, 200);
+    if (bodyText.trimStart().startsWith("<")) {
+      throw new Error(
+        "WF Connect API returned HTML instead of JSON. Check WFCONNECT_API_BASE_URL (must be https://guide.wfconnect.org with no trailing /admin path)."
+      );
+    }
+
+    const parseMessage =
+      err instanceof Error ? err.message : "Unknown JSON parse error";
+    throw new Error(
+      `Failed to parse WF Connect API JSON response: ${parseMessage}. Response preview: ${preview}`
+    );
+  }
   const applications = extractApplications(raw);
 
   logger.info({ count: applications.length }, "Fetched WF Connect applications");
@@ -97,10 +128,22 @@ export async function syncWfConnectApplications(): Promise<SyncResult> {
   let updated = 0;
   let skipped = 0;
   let errors = 0;
+  const skippedByReason = {
+    notApproved: 0,
+    missingId: 0,
+    missingName: 0,
+  };
 
   for (const app of applications) {
+    if (!isApprovedStatus(app.status)) {
+      skipped++;
+      skippedByReason.notApproved++;
+      continue;
+    }
+
     if (!app.id) {
       skipped++;
+      skippedByReason.missingId++;
       continue;
     }
 
@@ -108,6 +151,7 @@ export async function syncWfConnectApplications(): Promise<SyncResult> {
     if (!name) {
       logger.warn({ appId: app.id }, "Skipping application with no resolvable name");
       skipped++;
+      skippedByReason.missingName++;
       continue;
     }
 
@@ -148,6 +192,16 @@ export async function syncWfConnectApplications(): Promise<SyncResult> {
     }
   }
 
-  logger.info({ inserted, updated, skipped, errors }, "WF Connect sync complete");
-  return { fetched: applications.length, inserted, updated, skipped, errors };
+  logger.info(
+    { inserted, updated, skipped, errors, skippedByReason },
+    "WF Connect sync complete"
+  );
+  return {
+    fetched: applications.length,
+    inserted,
+    updated,
+    skipped,
+    errors,
+    skippedByReason,
+  };
 }

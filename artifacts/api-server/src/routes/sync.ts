@@ -70,9 +70,12 @@ router.post("/sync/workers", async (req, res): Promise<void> => {
 
   try {
     const result = await syncWfConnectApplications();
+    const skippedReasonMessage = result.skippedByReason
+      ? ` (not approved: ${result.skippedByReason.notApproved}, missing id: ${result.skippedByReason.missingId}, missing name: ${result.skippedByReason.missingName})`
+      : "";
     res.json({
       ...result,
-      message: `Synced ${result.fetched} workers from WF Connect (${result.inserted} new, ${result.updated} updated, ${result.skipped} skipped, ${result.errors} errors)`,
+      message: `Processed ${result.fetched} WF Connect applications (approved imports only): ${result.inserted} new, ${result.updated} updated, ${result.skipped} skipped, ${result.errors} errors${skippedReasonMessage}`,
     });
   } catch (err) {
     req.log.error({ err }, "WF Connect worker sync failed");

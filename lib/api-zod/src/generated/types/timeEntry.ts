@@ -11,15 +11,27 @@ import type { TimeEntryPaymentStatus } from "./timeEntryPaymentStatus";
 export interface TimeEntry {
   id: number;
   periodId: number;
+  /** @nullable */
+  payPeriodHotelId?: number | null;
   workerId: number;
   /** @nullable */
   hotelId?: number | null;
   workerName: string;
   /** @nullable */
   hotelName?: string | null;
+  /** @nullable */
+  role?: string | null;
   entryType: TimeEntryEntryType;
   /** @nullable */
   workDate?: string | null;
+  /** @nullable */
+  regularHours?: number | null;
+  /** @nullable */
+  overtimeHours?: number | null;
+  /** @nullable */
+  otherHours?: number | null;
+  /** @nullable */
+  totalHours?: number | null;
   /** @nullable */
   hoursWorked?: number | null;
   /** @nullable */

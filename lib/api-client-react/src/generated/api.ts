@@ -19,6 +19,7 @@ import type {
 import type {
   AnalyzeImportBody,
   AuthUser,
+  BulkSaveHotelEntriesBody,
   BulkUpsertResult,
   BulkUpsertTimeEntriesBody,
   BusinessProfile,
@@ -37,6 +38,7 @@ import type {
   GenerateInvoiceFromPeriodBody,
   HealthStatus,
   Hotel,
+  HotelSectionSaveResult,
   ImportAnalysis,
   ImportResult,
   Invoice,
@@ -63,6 +65,7 @@ import type {
   UpdateWorkerBody,
   UploadLogoBody,
   Worker,
+  WorkerHotelRate,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -1403,6 +1406,94 @@ export const useDeleteHotel = <
 };
 
 /**
+ * @summary List saved worker rate overrides for a hotel
+ */
+export const getListHotelWorkerRatesUrl = (id: number) => {
+  return `/api/hotels/${id}/worker-rates`;
+};
+
+export const listHotelWorkerRates = async (
+  id: number,
+  options?: RequestInit,
+): Promise<WorkerHotelRate[]> => {
+  return customFetch<WorkerHotelRate[]>(getListHotelWorkerRatesUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListHotelWorkerRatesQueryKey = (id: number) => {
+  return [`/api/hotels/${id}/worker-rates`] as const;
+};
+
+export const getListHotelWorkerRatesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listHotelWorkerRates>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listHotelWorkerRates>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListHotelWorkerRatesQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listHotelWorkerRates>>
+  > = ({ signal }) => listHotelWorkerRates(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listHotelWorkerRates>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListHotelWorkerRatesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listHotelWorkerRates>>
+>;
+export type ListHotelWorkerRatesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List saved worker rate overrides for a hotel
+ */
+
+export function useListHotelWorkerRates<
+  TData = Awaited<ReturnType<typeof listHotelWorkerRates>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listHotelWorkerRates>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListHotelWorkerRatesQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * @summary List all pay periods
  */
 export const getListPayPeriodsUrl = () => {
@@ -2283,6 +2374,98 @@ export const useBulkUpsertTimeEntries = <
   TContext
 > => {
   return useMutation(getBulkUpsertTimeEntriesMutationOptions(options));
+};
+
+/**
+ * @summary Save all entries for one pay-period hotel section
+ */
+export const getSaveHotelSectionEntriesUrl = (periodId: number, id: number) => {
+  return `/api/pay-periods/${periodId}/hotels/${id}/entries/save`;
+};
+
+export const saveHotelSectionEntries = async (
+  periodId: number,
+  id: number,
+  bulkSaveHotelEntriesBody: BulkSaveHotelEntriesBody,
+  options?: RequestInit,
+): Promise<HotelSectionSaveResult> => {
+  return customFetch<HotelSectionSaveResult>(
+    getSaveHotelSectionEntriesUrl(periodId, id),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(bulkSaveHotelEntriesBody),
+    },
+  );
+};
+
+export const getSaveHotelSectionEntriesMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof saveHotelSectionEntries>>,
+    TError,
+    { periodId: number; id: number; data: BodyType<BulkSaveHotelEntriesBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof saveHotelSectionEntries>>,
+  TError,
+  { periodId: number; id: number; data: BodyType<BulkSaveHotelEntriesBody> },
+  TContext
+> => {
+  const mutationKey = ["saveHotelSectionEntries"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof saveHotelSectionEntries>>,
+    { periodId: number; id: number; data: BodyType<BulkSaveHotelEntriesBody> }
+  > = (props) => {
+    const { periodId, id, data } = props ?? {};
+
+    return saveHotelSectionEntries(periodId, id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SaveHotelSectionEntriesMutationResult = NonNullable<
+  Awaited<ReturnType<typeof saveHotelSectionEntries>>
+>;
+export type SaveHotelSectionEntriesMutationBody =
+  BodyType<BulkSaveHotelEntriesBody>;
+export type SaveHotelSectionEntriesMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Save all entries for one pay-period hotel section
+ */
+export const useSaveHotelSectionEntries = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof saveHotelSectionEntries>>,
+    TError,
+    { periodId: number; id: number; data: BodyType<BulkSaveHotelEntriesBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof saveHotelSectionEntries>>,
+  TError,
+  { periodId: number; id: number; data: BodyType<BulkSaveHotelEntriesBody> },
+  TContext
+> => {
+  return useMutation(getSaveHotelSectionEntriesMutationOptions(options));
 };
 
 /**

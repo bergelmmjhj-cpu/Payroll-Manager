@@ -101,6 +101,9 @@ export default function Workers() {
                     <span className="inline-flex items-center px-3 py-1 rounded-full bg-indigo-100 text-indigo-800 font-semibold text-sm capitalize">
                       {worker.workerType}
                     </span>
+                    {worker.defaultRate != null && (
+                      <p className="mt-2 text-sm font-medium text-muted-foreground">Default rate {worker.defaultRate.toFixed(2)}/hr</p>
+                    )}
                   </td>
                   <td className="p-5">
                     <p className="text-lg font-medium capitalize">{worker.paymentMethod || 'Not set'}</p>
@@ -165,6 +168,7 @@ function WorkerModal({ open, onClose, worker, onSuccess }: { open: boolean, onCl
       workerType: fd.get("workerType") as string,
       phone: fd.get("phone") as string || null,
       email: fd.get("email") as string || null,
+      defaultRate: fd.get("defaultRate") ? Number(fd.get("defaultRate")) : null,
       paymentMethod: fd.get("paymentMethod") as string || null,
       interacEmail: fd.get("interacEmail") as string || null,
       isActive: fd.get("isActive") === "true",
@@ -199,6 +203,10 @@ function WorkerModal({ open, onClose, worker, onSuccess }: { open: boolean, onCl
           <div className="space-y-2">
             <Label>Email</Label>
             <Input type="email" name="email" defaultValue={worker?.email || ""} />
+          </div>
+          <div className="space-y-2">
+            <Label>Default Rate</Label>
+            <Input type="number" min="0" step="0.01" name="defaultRate" defaultValue={worker?.defaultRate ?? ""} />
           </div>
           <div className="space-y-2">
             <Label>Payment Method</Label>

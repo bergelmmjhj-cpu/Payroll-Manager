@@ -5,6 +5,7 @@
  * MMJ Payroll System API
  * OpenAPI spec version: 0.1.0
  */
+import type { HotelPosition } from "./hotelPosition";
 
 export interface Hotel {
   id: number;
@@ -28,6 +29,10 @@ export interface Hotel {
   isActive: boolean;
   /** @nullable */
   notes?: string | null;
+  hiringStatus: string;
+  payRate: string;
+  jobPosition: string;
+  positions: HotelPosition[];
   createdAt: string;
   updatedAt: string;
 }

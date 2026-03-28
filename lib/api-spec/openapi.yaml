@@ -319,6 +319,27 @@ paths:
         "204":
           description: Deleted
 
+  /hotels/{id}/worker-rates:
+    get:
+      operationId: listHotelWorkerRates
+      tags: [hotels]
+      summary: List saved worker rate overrides for a hotel
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Hotel worker rate overrides
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WorkerHotelRate"
+
   # ─── Pay Periods ─────────────────────────────────────────────────────────────
   /pay-periods:
     get:
@@ -544,6 +565,36 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/BulkUpsertResult"
+
+  /pay-periods/{periodId}/hotels/{id}/entries/save:
+    post:
+      operationId: saveHotelSectionEntries
+      tags: [timeEntries]
+      summary: Save all entries for one pay-period hotel section
+      parameters:
+        - name: periodId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkSaveHotelEntriesBody"
+      responses:
+        "200":
+          description: Save result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HotelSectionSaveResult"
 
   # ─── Tally ───────────────────────────────────────────────────────────────────
   /pay-periods/{periodId}/tally:
@@ -1198,6 +1249,8 @@ components:
         workerType:
           type: string
           enum: [payroll, subcontractor]
+        defaultRate:
+          type: ["number", "null"]
         isActive:
           type: boolean
         interacEmail:
@@ -1236,6 +1289,8 @@ components:
         workerType:
           type: string
           enum: [payroll, subcontractor]
+        defaultRate:
+          type: ["number", "null"]
         interacEmail:
           type: ["string", "null"]
         paymentMethod:
@@ -1268,6 +1323,8 @@ components:
         workerType:
           type: string
           enum: [payroll, subcontractor]
+        defaultRate:
+          type: ["number", "null"]
         isActive:
           type: boolean
         interacEmail:
@@ -1310,11 +1367,52 @@ components:
           type: boolean
         notes:
           type: ["string", "null"]
+        hiringStatus:
+          type: string
+        payRate:
+          type: string
+        jobPosition:
+          type: string
+        positions:
+          type: array
+          items:
+            $ref: "#/components/schemas/HotelPosition"
         createdAt:
           type: string
         updatedAt:
           type: string
-      required: [id, name, isActive, createdAt, updatedAt]
+      required: [id, name, isActive, hiringStatus, payRate, jobPosition, positions, createdAt, updatedAt]
+
+    HotelPosition:
+      type: object
+      properties:
+        title:
+          type: ["string", "null"]
+        rate:
+          type: ["number", "string", "null"]
+        rateType:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+
+    WorkerHotelRate:
+      type: object
+      properties:
+        id:
+          type: integer
+        workerId:
+          type: integer
+        hotelId:
+          type: integer
+        role:
+          type: ["string", "null"]
+        rate:
+          type: number
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required: [id, workerId, hotelId, rate, createdAt, updatedAt]
 
     CreateHotelBody:
       type: object
@@ -1462,6 +1560,8 @@ components:
           type: integer
         periodId:
           type: integer
+        payPeriodHotelId:
+          type: ["integer", "null"]
         workerId:
           type: integer
         hotelId:
@@ -1470,11 +1570,21 @@ components:
           type: string
         hotelName:
           type: ["string", "null"]
+        role:
+          type: ["string", "null"]
         entryType:
           type: string
           enum: [payroll, subcontractor]
         workDate:
           type: ["string", "null"]
+        regularHours:
+          type: ["number", "null"]
+        overtimeHours:
+          type: ["number", "null"]
+        otherHours:
+          type: ["number", "null"]
+        totalHours:
+          type: ["number", "null"]
         hoursWorked:
           type: ["number", "null"]
         ratePerHour:
@@ -1505,13 +1615,25 @@ components:
       properties:
         workerId:
           type: integer
+        payPeriodHotelId:
+          type: ["integer", "null"]
         hotelId:
           type: ["integer", "null"]
+        role:
+          type: ["string", "null"]
         entryType:
           type: string
           enum: [payroll, subcontractor]
         workDate:
           type: ["string", "null"]
+        regularHours:
+          type: ["number", "null"]
+        overtimeHours:
+          type: ["number", "null"]
+        otherHours:
+          type: ["number", "null"]
+        totalHours:
+          type: ["number", "null"]
         hoursWorked:
           type: ["number", "null"]
         ratePerHour:
@@ -1535,13 +1657,25 @@ components:
       properties:
         workerId:
           type: integer
+        payPeriodHotelId:
+          type: ["integer", "null"]
         hotelId:
           type: ["integer", "null"]
+        role:
+          type: ["string", "null"]
         entryType:
           type: string
           enum: [payroll, subcontractor]
         workDate:
           type: ["string", "null"]
+        regularHours:
+          type: ["number", "null"]
+        overtimeHours:
+          type: ["number", "null"]
+        otherHours:
+          type: ["number", "null"]
+        totalHours:
+          type: ["number", "null"]
         hoursWorked:
           type: ["number", "null"]
         ratePerHour:
@@ -1573,6 +1707,52 @@ components:
           type: boolean
       required: [entries]
 
+    BulkSaveHotelEntriesBody:
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/HotelSectionEntryInput"
+      required: [entries]
+
+    HotelSectionEntryInput:
+      type: object
+      properties:
+        id:
+          type: ["integer", "null"]
+        workerId:
+          type: ["integer", "null"]
+        role:
+          type: ["string", "null"]
+        entryType:
+          type: string
+          enum: [payroll, subcontractor]
+        workDate:
+          type: ["string", "null"]
+        regularHours:
+          type: ["number", "null"]
+        overtimeHours:
+          type: ["number", "null"]
+        otherHours:
+          type: ["number", "null"]
+        totalHours:
+          type: ["number", "null"]
+        hoursWorked:
+          type: ["number", "null"]
+        ratePerHour:
+          type: ["number", "null"]
+        flatAmount:
+          type: ["number", "null"]
+        totalAmount:
+          type: ["number", "null"]
+        paymentMethod:
+          type: ["string", "null"]
+        interacEmail:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+
     BulkUpsertResult:
       type: object
       properties:
@@ -1583,6 +1763,19 @@ components:
         total:
           type: integer
       required: [inserted, updated, total]
+
+    HotelSectionSaveResult:
+      type: object
+      properties:
+        inserted:
+          type: integer
+        updated:
+          type: integer
+        deleted:
+          type: integer
+        total:
+          type: integer
+      required: [inserted, updated, deleted, total]
 
     TallySummary:
       type: object
