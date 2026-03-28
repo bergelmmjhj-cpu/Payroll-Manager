@@ -45,6 +45,17 @@ type WfApiResponse =
   | { results: WfApplication[] }
   | { applications: WfApplication[] };
 
+function sanitizeApiKey(rawApiKey?: string): string {
+  const value = (rawApiKey ?? "").trim();
+  if (!value) return "";
+
+  // Accept accidental formats copied into env vars.
+  const withoutBearer = value.replace(/^Bearer\s+/i, "");
+  const withoutQuotes = withoutBearer.replace(/^['"]|['"]$/g, "");
+
+  return withoutQuotes.trim();
+}
+
 function normalizeWfConnectBaseUrl(rawBase?: string): string {
   const fallback = "https://guide.wfconnect.org";
   const trimmed = (rawBase ?? fallback).trim();
@@ -85,12 +96,23 @@ function isApprovedStatus(status?: string): boolean {
  * Optional env: WFCONNECT_API_BASE_URL (default: https://guide.wfconnect.org)
  */
 export async function syncWfConnectApplications(): Promise<SyncResult> {
-  const apiKey = process.env.WFCONNECT_API_KEY;
+  const rawApiKey = process.env.WFCONNECT_API_KEY;
+  const apiKey = sanitizeApiKey(rawApiKey);
   const rawApiBase = process.env.WFCONNECT_API_BASE_URL;
   const apiBase = normalizeWfConnectBaseUrl(rawApiBase);
 
   if (!apiKey) {
     throw new Error("WFCONNECT_API_KEY is not set");
+  }
+
+  if (rawApiKey && rawApiKey !== apiKey) {
+    logger.warn(
+      {
+        rawLength: rawApiKey.length,
+        sanitizedLength: apiKey.length,
+      },
+      "Sanitizing WFCONNECT_API_KEY before request"
+    );
   }
 
   if (rawApiBase && rawApiBase.trim() !== apiBase) {
@@ -115,7 +137,9 @@ export async function syncWfConnectApplications(): Promise<SyncResult> {
     const candidateResponse = await fetch(candidateUrl, {
       headers: {
         Authorization: `Bearer ${apiKey}`,
+        Accept: "application/json",
         "Content-Type": "application/json",
+        "User-Agent": "Payroll-Manager/worker-sync",
       },
     });
 
@@ -143,6 +167,13 @@ export async function syncWfConnectApplications(): Promise<SyncResult> {
 
   if (!response.ok) {
     const body = await response.text();
+
+    if (response.status === 401) {
+      throw new Error(
+        `WF Connect authentication failed (401) from ${url}. Verify WFCONNECT_API_KEY is the raw token value (no Bearer prefix, no quotes/newlines) and has applications-read permissions.`
+      );
+    }
+
     throw new Error(
       `WF Connect API responded ${response.status} from ${url}: ${body.slice(0, 300)}`
     );
