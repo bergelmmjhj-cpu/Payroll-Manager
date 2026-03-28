@@ -76,6 +76,7 @@ interface WfApplication {
   bank_institution?: string | number;
   transit_number?: string | number;
   transit?: string | number;
+  bank_transit?: string | number;
   branch_number?: string | number;
   account_number?: string | number;
   etransfer_email?: string;
@@ -299,18 +300,22 @@ function extractPaymentFields(app: WfApplication): ParsedPaymentFields {
   const transitNumber = pickFirstString(app, [
     "transit_number",
     "transit",
+    "bank_transit",
     "branch_number",
     "transitNumber",
     "payment_information.transit_number",
     "payment_information.transit",
+    "payment_information.bank_transit",
     "payment_information.branch_number",
     "payment_information.transitNumber",
     "paymentInfo.transitNumber",
     "paymentInfo.transit_number",
     "paymentInfo.transit",
+    "paymentInfo.bank_transit",
     "paymentProfile.transitNumber",
     "paymentProfile.transit_number",
     "paymentProfile.transit",
+    "paymentProfile.bank_transit",
   ]);
 
   const accountNumber = pickFirstString(app, [
