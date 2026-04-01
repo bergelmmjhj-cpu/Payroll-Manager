@@ -1,7 +1,7 @@
 import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
-import { db, authUsersTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, authUsersTable, workersTable } from "@workspace/db";
+import { eq, and, ne } from "drizzle-orm";
 import { logger } from "./logger";
 
 const replitDomain = process.env.REPLIT_DEV_DOMAIN;
@@ -56,6 +56,37 @@ passport.use(
             .where(eq(authUsersTable.googleId, profile.id))
             .returning();
 
+          // Try auto-link on re-login if not yet linked
+          if (!user.workerId) {
+            const [matchingWorker] = await db
+              .select()
+              .from(workersTable)
+              .where(eq(workersTable.email, email))
+              .limit(1);
+
+            if (matchingWorker) {
+              const [alreadyClaimed] = await db
+                .select({ id: authUsersTable.id })
+                .from(authUsersTable)
+                .where(
+                  and(
+                    eq(authUsersTable.workerId, matchingWorker.id),
+                    ne(authUsersTable.id, user.id),
+                  ),
+                )
+                .limit(1);
+
+              if (!alreadyClaimed) {
+                const [linked] = await db
+                  .update(authUsersTable)
+                  .set({ workerId: matchingWorker.id, isAdmin: false, role: "worker" })
+                  .where(eq(authUsersTable.id, user.id))
+                  .returning();
+                return done(null, linked);
+              }
+            }
+          }
+
           return done(null, user);
         }
 
@@ -63,6 +94,44 @@ passport.use(
           .insert(authUsersTable)
           .values({ googleId: profile.id, email, name, avatarUrl })
           .returning();
+
+        // Auto-link: if email matches an existing worker that is not yet claimed,
+        // link this auth account to that worker and demote from admin.
+        if (!user.workerId) {
+          const [matchingWorker] = await db
+            .select()
+            .from(workersTable)
+            .where(eq(workersTable.email, email))
+            .limit(1);
+
+          if (matchingWorker) {
+            const [alreadyClaimed] = await db
+              .select({ id: authUsersTable.id })
+              .from(authUsersTable)
+              .where(
+                and(
+                  eq(authUsersTable.workerId, matchingWorker.id),
+                  ne(authUsersTable.id, user.id),
+                ),
+              )
+              .limit(1);
+
+            if (!alreadyClaimed) {
+              const [linked] = await db
+                .update(authUsersTable)
+                .set({ workerId: matchingWorker.id, isAdmin: false, role: "worker" })
+                .where(eq(authUsersTable.id, user.id))
+                .returning();
+              return done(null, linked);
+            }
+            // Ambiguous: two Google accounts competing for the same worker.
+            // Leave for admin to resolve via POST /api/auth/link-worker.
+            logger.warn(
+              { workerId: matchingWorker.id, authUserId: user.id },
+              "Worker email already claimed by another auth account – skipping auto-link",
+            );
+          }
+        }
 
         return done(null, user);
       } catch (err) {

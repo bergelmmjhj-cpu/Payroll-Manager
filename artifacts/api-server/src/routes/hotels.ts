@@ -88,7 +88,12 @@ router.patch("/hotels/:id", async (req, res): Promise<void> => {
   const body = req.body;
 
   const update: Partial<typeof hotelsTable.$inferInsert> = {};
-  const fields = ["name", "address", "city", "province", "region", "contactName", "contactPhone", "contactEmail", "isActive", "notes"] as const;
+  const fields = [
+    "name", "address", "city", "province", "region",
+    "contactName", "contactPhone", "contactEmail",
+    "isActive", "notes",
+    "latitude", "longitude", "geofenceRadiusMeters",
+  ] as const;
   for (const f of fields) {
     if (body[f] !== undefined) (update as any)[f] = body[f];
   }

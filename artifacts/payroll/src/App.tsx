@@ -16,6 +16,7 @@ import Invoices from "@/pages/Invoices";
 import InvoiceDetail from "@/pages/InvoiceDetail";
 import Settings from "@/pages/Settings";
 import ImportWizard from "@/pages/ImportWizard";
+import Timecard from "@/pages/Timecard";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -34,6 +35,7 @@ function ProtectedRoutes() {
           <Route path="/invoices/:id" component={InvoiceDetail} />
           <Route path="/settings" component={Settings} />
           <Route path="/import" component={ImportWizard} />
+          <Route path="/timecard" component={Timecard} />
           <Route component={NotFound} />
         </Switch>
       </Layout>

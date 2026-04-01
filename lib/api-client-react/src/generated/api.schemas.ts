@@ -24,6 +24,10 @@ export interface AuthUser {
   googleId: string;
   /** @nullable */
   avatarUrl?: string | null;
+  isAdmin: boolean;
+  role: string;
+  /** @nullable */
+  workerId?: number | null;
 }
 
 export interface SyncResult {

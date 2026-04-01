@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, boolean, jsonb, numeric, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -16,6 +16,9 @@ export const hotelsTable = pgTable("hotels", {
   contactEmail: text("contact_email"),
   isActive: boolean("is_active").notNull().default(true),
   notes: text("notes"),
+  latitude: numeric("latitude", { precision: 10, scale: 7 }),
+  longitude: numeric("longitude", { precision: 10, scale: 7 }),
+  geofenceRadiusMeters: integer("geofence_radius_meters").notNull().default(200),
   hiringStatus: text("hiring_status").notNull().default("open"),
   payRate: text("pay_rate").notNull().default(""),
   jobPosition: text("job_position").notNull().default(""),

@@ -1195,7 +1195,13 @@ components:
           type: string
         avatarUrl:
           type: ["string", "null"]
-      required: [id, email, name, googleId]
+        isAdmin:
+          type: boolean
+        role:
+          type: string
+        workerId:
+          type: ["integer", "null"]
+      required: [id, email, name, googleId, isAdmin, role]
 
     SyncResult:
       type: object

@@ -1,10 +1,10 @@
 import React, { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, Users, Building2, CalendarDays, Receipt, Settings, LogOut, Menu, X } from "lucide-react";
+import { LayoutDashboard, Users, Building2, CalendarDays, Receipt, Settings, LogOut, Menu, Clock } from "lucide-react";
 import { useGetMe, useLogout } from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
 
-const NAV_ITEMS = [
+const ADMIN_NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/workers", label: "Workers Directory", icon: Users },
   { href: "/hotels", label: "Hotels & Sites", icon: Building2 },
@@ -13,11 +13,18 @@ const NAV_ITEMS = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
+const WORKER_NAV_ITEMS = [
+  { href: "/timecard", label: "My Timecard", icon: Clock },
+];
+
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { data: user } = useGetMe();
   const logout = useLogout();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+
+  const isWorker = !!user?.workerId && !user?.isAdmin;
+  const navItems = isWorker ? WORKER_NAV_ITEMS : ADMIN_NAV_ITEMS;
 
   const handleLogout = async () => {
     await logout.mutateAsync();
@@ -50,7 +57,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
 
         <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
-          {NAV_ITEMS.map((item) => {
+          {navItems.map((item) => {
             const isActive = location === item.href || (item.href !== "/" && location.startsWith(item.href));
             return (
               <Link 

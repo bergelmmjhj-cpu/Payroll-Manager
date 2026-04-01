@@ -10,6 +10,7 @@ import importRouter from "./importRoutes";
 import businessProfilesRouter from "./businessProfiles";
 import logosRouter from "./logos";
 import invoicesRouter from "./invoices";
+import timelogRouter from "./timelog";
 
 const router: IRouter = Router();
 
@@ -24,5 +25,6 @@ router.use(importRouter);
 router.use(businessProfilesRouter);
 router.use(logosRouter);
 router.use(invoicesRouter);
+router.use(timelogRouter);
 
 export default router;

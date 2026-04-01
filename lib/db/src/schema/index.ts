@@ -5,3 +5,4 @@ export * from "./hotels";
 export * from "./payPeriods";
 export * from "./invoices";
 export * from "./sessions";
+export * from "./shiftLogs";
