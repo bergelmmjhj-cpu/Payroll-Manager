@@ -19,7 +19,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const u = user as any;
       const isWorker = !!u.workerId && !u.isAdmin;
-      if (isWorker && location === "/") {
+      if (isWorker && !location.startsWith("/timecard")) {
         setLocation("/timecard");
       }
     }
@@ -29,7 +29,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background">
         <Loader2 className="w-12 h-12 animate-spin text-primary mb-4" />
-        <p className="text-xl text-muted-foreground animate-pulse">Loading MMJ Payroll...</p>
+        <p className="text-xl text-muted-foreground animate-pulse">Loading...</p>
       </div>
     );
   }

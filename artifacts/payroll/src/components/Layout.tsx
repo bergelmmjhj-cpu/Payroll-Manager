@@ -48,11 +48,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
       )}>
         <div className="p-6 flex items-center gap-3">
           <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg shadow-primary/20">
-            <span className="text-white font-bold text-xl">M</span>
+            {isWorker ? <Clock className="text-white w-5 h-5" /> : <span className="text-white font-bold text-xl">M</span>}
           </div>
           <div>
-            <h1 className="font-display font-bold text-xl text-foreground leading-none">MMJ Payroll</h1>
-            <p className="text-sm text-muted-foreground mt-1">Operations System</p>
+            <h1 className="font-display font-bold text-xl text-foreground leading-none">
+              {isWorker ? "My Timecard" : "MMJ Payroll"}
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              {isWorker ? "Time In / Time Out" : "Operations System"}
+            </p>
           </div>
         </div>
 
@@ -103,9 +107,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <header className="h-20 bg-card border-b border-border/50 flex items-center justify-between px-4 sm:px-8 md:hidden">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold">M</span>
+              {isWorker ? <Clock className="text-white w-4 h-4" /> : <span className="text-white font-bold">M</span>}
             </div>
-            <span className="font-display font-bold text-lg">MMJ Payroll</span>
+            <span className="font-display font-bold text-lg">
+              {isWorker ? "Time In / Time Out" : "MMJ Payroll"}
+            </span>
           </div>
           <button 
             onClick={() => setIsMobileOpen(true)}
