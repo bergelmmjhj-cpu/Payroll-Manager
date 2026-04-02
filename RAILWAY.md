@@ -105,3 +105,28 @@ Polling cadence recommendation: run `POST /api/sync/workers` from an external sc
 
 - The current deployment target is the payroll app only. `artifacts/mockup-sandbox` is not part of the Railway runtime.
 - The backend still needs route-level auth hardening before exposing the app broadly on the public internet.
+
+## wfconnect-timeclock deployment
+
+The repository also includes a clean scaffold for a new app pair:
+
+- API package: `@workspace/wfconnect-timeclock-api`
+- Web package: `@workspace/wfconnect-timeclock-web`
+
+Recommended Railway topology for this pair is two services (one API service and one static web service).
+
+### API service
+
+- Build command: `pnpm run build:railway:wfconnect-timeclock`
+- Start command: `pnpm run start:railway:wfconnect-timeclock`
+- Required env vars: `NODE_ENV=production`, `PORT=8080`
+
+### Web service
+
+Deploy `artifacts/wfconnect-timeclock-web/dist/public` as a static site after running:
+
+- `pnpm --filter @workspace/wfconnect-timeclock-web run build`
+
+Set the API URL for the web app with:
+
+- `VITE_API_BASE_URL=https://<your-api-domain>`
