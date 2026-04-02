@@ -3,7 +3,7 @@ import { Clock, MapPin, CheckCircle, ArrowRight } from "lucide-react";
 
 export default function AccessPortal() {
   const handleLogin = () => {
-    window.location.href = "/api/auth/google";
+    window.location.href = "/api/auth/google?redirect=/timecard";
   };
 
   return (
@@ -20,14 +20,14 @@ export default function AccessPortal() {
         <Card className="w-full max-w-2xl p-10 md:p-14 text-center shadow-2xl bg-card/95 backdrop-blur-md border-primary/10 mb-8">
           {/* Logo */}
           <div className="mx-auto w-20 h-20 bg-primary rounded-2xl flex items-center justify-center mb-8 shadow-xl shadow-primary/25 rotate-3">
-            <span className="text-white font-bold text-3xl -rotate-3">M</span>
+            <Clock className="text-white w-9 h-9 -rotate-3" />
           </div>
 
           <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-foreground mb-3">
-            MMJ Worker Portal
+            Worker Time Portal
           </h1>
           <p className="text-lg text-muted-foreground mb-10">
-            Clock in, track your hours, and manage your timecard from anywhere.
+            Time in, time out, and manage your shifts from anywhere.
           </p>
 
           {/* Features */}

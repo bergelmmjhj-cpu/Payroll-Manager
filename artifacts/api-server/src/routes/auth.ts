@@ -5,12 +5,42 @@ import { eq, and, ne } from "drizzle-orm";
 
 const router: IRouter = Router();
 
-router.get("/auth/google", passport.authenticate("google", { scope: ["profile", "email"] }));
+router.get("/auth/google", (req, res, next): void => {
+  const redirect = typeof req.query.redirect === "string" ? req.query.redirect : undefined;
+  if (redirect && redirect.startsWith("/")) {
+    (req.session as any).returnTo = redirect;
+  }
+
+  passport.authenticate("google", { scope: ["profile", "email"] })(req, res, next);
+});
 
 router.get(
   "/auth/google/callback",
   passport.authenticate("google", { failureRedirect: "/login?error=auth_failed" }),
-  (_req, res): void => {
+  (req, res): void => {
+    const session = req.session as any;
+    const returnTo =
+      typeof session?.returnTo === "string" && session.returnTo.startsWith("/")
+        ? session.returnTo
+        : undefined;
+
+    if (session?.returnTo) {
+      delete session.returnTo;
+    }
+
+    const user = req.user as any;
+    const isWorker = !!user?.workerId && !user?.isAdmin;
+
+    if (returnTo) {
+      res.redirect(returnTo);
+      return;
+    }
+
+    if (isWorker) {
+      res.redirect("/timecard");
+      return;
+    }
+
     res.redirect("/");
   },
 );
