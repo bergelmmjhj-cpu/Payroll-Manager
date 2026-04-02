@@ -6,12 +6,26 @@ import { eq, and, ne } from "drizzle-orm";
 const router: IRouter = Router();
 
 router.get("/auth/google", (req, res, next): void => {
+  const beginGoogleAuth = (): void => {
+    passport.authenticate("google", { scope: ["profile", "email"] })(req, res, next);
+  };
+
   const redirect = typeof req.query.redirect === "string" ? req.query.redirect : undefined;
   if (redirect && redirect.startsWith("/")) {
-    (req.session as any).returnTo = redirect;
+    const session = req.session as any;
+    session.returnTo = redirect;
+    session.save((err: unknown) => {
+      if (err) {
+        next(err);
+        return;
+      }
+
+      beginGoogleAuth();
+    });
+    return;
   }
 
-  passport.authenticate("google", { scope: ["profile", "email"] })(req, res, next);
+  beginGoogleAuth();
 });
 
 router.get(
