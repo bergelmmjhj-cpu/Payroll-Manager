@@ -17,6 +17,7 @@ import InvoiceDetail from "@/pages/InvoiceDetail";
 import Settings from "@/pages/Settings";
 import ImportWizard from "@/pages/ImportWizard";
 import Timecard from "@/pages/Timecard";
+import AccessPortal from "@/pages/AccessPortal";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -50,6 +51,7 @@ function App() {
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
           <Switch>
             <Route path="/login" component={Login} />
+            <Route path="/access" component={AccessPortal} />
             <Route component={ProtectedRoutes} />
           </Switch>
         </WouterRouter>

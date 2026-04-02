@@ -4,7 +4,7 @@ import { useGetMe } from "@workspace/api-client-react";
 import { Loader2 } from "lucide-react";
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: user, error, isLoading } = useGetMe({ query: { retry: false } as any });
 
@@ -13,6 +13,17 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       setLocation("/login");
     }
   }, [error, isLoading, setLocation]);
+
+  useEffect(() => {
+    if (!isLoading && user && !error) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const u = user as any;
+      const isWorker = !!u.workerId && !u.isAdmin;
+      if (isWorker && location === "/") {
+        setLocation("/timecard");
+      }
+    }
+  }, [user, isLoading, error, location, setLocation]);
 
   if (isLoading) {
     return (
