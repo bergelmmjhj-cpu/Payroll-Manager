@@ -1,5 +1,8 @@
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { useLocation } from "wouter";
+import { useGetMe } from "@workspace/api-client-react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Layout } from "@/components/Layout";
@@ -21,6 +24,28 @@ import AccessPortal from "@/pages/AccessPortal";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
+
+function AuthRouteDebugLogger() {
+  const [location] = useLocation();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: user, isLoading, error } = useGetMe({ query: { retry: false } as any });
+
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const u = user as any;
+    console.debug("[auth-flow] route-change", {
+      path: location,
+      isLoading,
+      hasError: !!error,
+      userId: u?.id,
+      role: u?.role,
+      isAdmin: u?.isAdmin,
+      workerId: u?.workerId,
+    });
+  }, [location, isLoading, error, user]);
+
+  return null;
+}
 
 function ProtectedRoutes() {
   return (
@@ -49,6 +74,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+          <AuthRouteDebugLogger />
           <Switch>
             <Route path="/login" component={Login} />
             <Route path="/access" component={AccessPortal} />

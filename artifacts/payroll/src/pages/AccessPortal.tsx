@@ -3,7 +3,9 @@ import { Clock, MapPin, CheckCircle, ArrowRight } from "lucide-react";
 
 export default function AccessPortal() {
   const handleLogin = () => {
-    window.location.href = "/api/auth/google?redirect=/timecard";
+    const target = "/api/auth/google?redirect=/timecard";
+    console.debug("[auth-flow] access-portal-signin-click", { target });
+    window.location.href = target;
   };
 
   return (

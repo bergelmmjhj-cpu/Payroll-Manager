@@ -2,8 +2,13 @@ import { Router, type IRouter } from "express";
 import passport from "passport";
 import { db, authUsersTable, workersTable } from "@workspace/db";
 import { eq, and, ne } from "drizzle-orm";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
+
+function isSafeRedirectPath(value: unknown): value is string {
+  return typeof value === "string" && value.startsWith("/") && !value.startsWith("//");
+}
 
 router.get("/auth/google", (req, res, next): void => {
   const beginGoogleAuth = (): void => {
@@ -11,19 +16,40 @@ router.get("/auth/google", (req, res, next): void => {
   };
 
   const redirect = typeof req.query.redirect === "string" ? req.query.redirect : undefined;
-  if (redirect && redirect.startsWith("/")) {
+  logger.info(
+    {
+      sessionId: req.sessionID,
+      requestedRedirect: redirect,
+      existingReturnTo: (req.session as any)?.returnTo,
+      path: req.path,
+    },
+    "oauth_start_request",
+  );
+
+  if (isSafeRedirectPath(redirect)) {
     const session = req.session as any;
     session.returnTo = redirect;
     session.save((err: unknown) => {
       if (err) {
+        logger.error({ err, sessionId: req.sessionID, redirect }, "oauth_start_session_save_failed");
         next(err);
         return;
       }
+
+      logger.info(
+        { sessionId: req.sessionID, savedReturnTo: session.returnTo, path: req.path },
+        "oauth_start_session_saved",
+      );
 
       beginGoogleAuth();
     });
     return;
   }
+
+  logger.info(
+    { sessionId: req.sessionID, requestedRedirect: redirect, path: req.path },
+    "oauth_start_without_return_to",
+  );
 
   beginGoogleAuth();
 });
@@ -33,29 +59,37 @@ router.get(
   passport.authenticate("google", { failureRedirect: "/login?error=auth_failed" }),
   (req, res): void => {
     const session = req.session as any;
-    const returnTo =
-      typeof session?.returnTo === "string" && session.returnTo.startsWith("/")
-        ? session.returnTo
-        : undefined;
+    const returnTo = isSafeRedirectPath(session?.returnTo) ? session.returnTo : undefined;
+
+    const user = req.user as any;
+    const isWorker = !!user?.workerId && !user?.isAdmin;
+
+    const finalTarget = returnTo ?? (isWorker ? "/timecard" : "/");
+
+    logger.info(
+      {
+        sessionId: req.sessionID,
+        sessionReturnTo: session?.returnTo,
+        resolvedReturnTo: returnTo,
+        userId: user?.id,
+        userRole: user?.role,
+        userIsAdmin: user?.isAdmin,
+        userWorkerId: user?.workerId,
+        finalTarget,
+      },
+      "oauth_callback_resolved_redirect",
+    );
 
     if (session?.returnTo) {
       delete session.returnTo;
     }
 
-    const user = req.user as any;
-    const isWorker = !!user?.workerId && !user?.isAdmin;
-
-    if (returnTo) {
-      res.redirect(returnTo);
-      return;
-    }
-
-    if (isWorker) {
-      res.redirect("/timecard");
-      return;
-    }
-
-    res.redirect("/");
+    session.save((err: unknown) => {
+      if (err) {
+        logger.error({ err, sessionId: req.sessionID }, "oauth_callback_session_cleanup_failed");
+      }
+      res.redirect(finalTarget);
+    });
   },
 );
 

@@ -1,7 +1,7 @@
 import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import { db, authUsersTable, workersTable } from "@workspace/db";
-import { eq, and, ne } from "drizzle-orm";
+import { eq, and, ne, sql } from "drizzle-orm";
 import { logger } from "./logger";
 
 const replitDomain = process.env.REPLIT_DEV_DOMAIN;
@@ -39,9 +39,15 @@ passport.use(
     },
     async (_accessToken, _refreshToken, profile, done) => {
       try {
-        const email = profile.emails?.[0]?.value ?? "";
-        const name = profile.displayName ?? email;
+        const rawEmail = profile.emails?.[0]?.value ?? "";
+        const normalizedEmail = rawEmail.trim().toLowerCase();
+        const name = profile.displayName ?? normalizedEmail;
         const avatarUrl = profile.photos?.[0]?.value ?? null;
+
+        logger.info(
+          { googleId: profile.id, rawEmail, normalizedEmail },
+          "passport_google_profile_received",
+        );
 
         const existing = await db
           .select()
@@ -50,9 +56,11 @@ passport.use(
           .limit(1);
 
         if (existing.length > 0) {
+          logger.info({ authUserId: existing[0].id, normalizedEmail }, "passport_existing_google_user");
+
           const [user] = await db
             .update(authUsersTable)
-            .set({ name, avatarUrl, email })
+            .set({ name, avatarUrl, email: normalizedEmail })
             .where(eq(authUsersTable.googleId, profile.id))
             .returning();
 
@@ -61,8 +69,17 @@ passport.use(
             const [matchingWorker] = await db
               .select()
               .from(workersTable)
-              .where(eq(workersTable.email, email))
+              .where(sql`lower(${workersTable.email}) = ${normalizedEmail}`)
               .limit(1);
+
+            logger.info(
+              {
+                authUserId: user.id,
+                normalizedEmail,
+                matchingWorkerId: matchingWorker?.id,
+              },
+              "passport_relogin_worker_match",
+            );
 
             if (matchingWorker) {
               const [alreadyClaimed] = await db
@@ -82,18 +99,37 @@ passport.use(
                   .set({ workerId: matchingWorker.id, isAdmin: false, role: "worker" })
                   .where(eq(authUsersTable.id, user.id))
                   .returning();
+                logger.info(
+                  { authUserId: user.id, workerId: matchingWorker.id },
+                  "passport_relogin_worker_autolinked",
+                );
                 return done(null, linked);
               }
+
+              logger.warn(
+                { authUserId: user.id, workerId: matchingWorker.id, claimedByAuthUserId: alreadyClaimed.id },
+                "passport_relogin_worker_already_claimed",
+              );
+            }
+
+            if (!matchingWorker) {
+              logger.info({ authUserId: user.id, normalizedEmail }, "passport_relogin_no_worker_match");
             }
           }
 
+          logger.info(
+            { authUserId: user.id, workerId: user.workerId, isAdmin: user.isAdmin, role: user.role },
+            "passport_relogin_no_link_change",
+          );
           return done(null, user);
         }
 
         const [user] = await db
           .insert(authUsersTable)
-          .values({ googleId: profile.id, email, name, avatarUrl })
+          .values({ googleId: profile.id, email: normalizedEmail, name, avatarUrl })
           .returning();
+
+        logger.info({ authUserId: user.id, normalizedEmail }, "passport_new_google_user_created");
 
         // Auto-link: if email matches an existing worker that is not yet claimed,
         // link this auth account to that worker and demote from admin.
@@ -101,8 +137,13 @@ passport.use(
           const [matchingWorker] = await db
             .select()
             .from(workersTable)
-            .where(eq(workersTable.email, email))
+            .where(sql`lower(${workersTable.email}) = ${normalizedEmail}`)
             .limit(1);
+
+          logger.info(
+            { authUserId: user.id, normalizedEmail, matchingWorkerId: matchingWorker?.id },
+            "passport_new_user_worker_match",
+          );
 
           if (matchingWorker) {
             const [alreadyClaimed] = await db
@@ -122,17 +163,32 @@ passport.use(
                 .set({ workerId: matchingWorker.id, isAdmin: false, role: "worker" })
                 .where(eq(authUsersTable.id, user.id))
                 .returning();
+              logger.info(
+                { authUserId: user.id, workerId: matchingWorker.id },
+                "passport_new_user_worker_autolinked",
+              );
               return done(null, linked);
             }
             // Ambiguous: two Google accounts competing for the same worker.
             // Leave for admin to resolve via POST /api/auth/link-worker.
             logger.warn(
-              { workerId: matchingWorker.id, authUserId: user.id },
+              {
+                workerId: matchingWorker.id,
+                authUserId: user.id,
+                claimedByAuthUserId: alreadyClaimed.id,
+                normalizedEmail,
+              },
               "Worker email already claimed by another auth account – skipping auto-link",
             );
+          } else {
+            logger.info({ authUserId: user.id, normalizedEmail }, "passport_new_user_no_worker_match");
           }
         }
 
+        logger.info(
+          { authUserId: user.id, workerId: user.workerId, isAdmin: user.isAdmin, role: user.role },
+          "passport_new_user_no_link_change",
+        );
         return done(null, user);
       } catch (err) {
         logger.error({ err }, "Passport Google strategy error");
